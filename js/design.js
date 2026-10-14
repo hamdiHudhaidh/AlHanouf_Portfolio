@@ -151,30 +151,25 @@ function makePageCanvas(renderer) {
   return { c, tex, g };
 }
 
-function paintEssay(page, project, mirror) {
+function paintEssay(page, project) {
   const { c, g, tex } = page;
   const S = c.width / 900;
-  paperFill(g, c, mirror ? 3 : 5);
+  paperFill(g, c, 5);
   frame(g, c);
-  g.save();
-  if (mirror) {
-    g.translate(c.width, 0);
-    g.scale(-1, 1);
-  }
-  const left = 92 * S;
-  const maxW = c.width - 184 * S;
-  let y = 168 * S;
+  const left = 96 * S;
+  const maxW = c.width - 200 * S;
+  let y = 240 * S;
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   if (project.year) {
     g.fillStyle = CLAY;
-    g.font = `500 ${20 * S}px Inter, sans-serif`;
+    g.font = `500 ${28 * S}px Inter, sans-serif`;
     g.fillText(String(project.year), left, y);
-    y += 78 * S;
+    y += 110 * S;
   }
   g.fillStyle = INK;
-  g.font = `500 ${64 * S}px Cormorant, Georgia, serif`;
-  y = wrap(g, project.title, left, y, maxW, 76 * S, 3) + 18 * S;
+  g.font = `500 ${112 * S}px Cormorant, Georgia, serif`;
+  y = wrap(g, project.title, left, y, maxW, 124 * S, 3) + 24 * S;
   g.strokeStyle = CLAY;
   g.lineWidth = 2.5 * S;
   g.beginPath();
@@ -184,30 +179,27 @@ function paintEssay(page, project, mirror) {
   y += 52 * S;
   if (project.text) {
     g.fillStyle = MUTED;
-    g.font = `400 ${26 * S}px Inter, sans-serif`;
-    y = wrap(g, project.text, left, y, maxW, 42 * S, 8) + 28 * S;
+    g.font = `400 ${34 * S}px Inter, sans-serif`;
+    y = wrap(g, project.text, left, y, maxW, 52 * S, 8) + 36 * S;
   }
   if (project.links?.length) {
     g.fillStyle = INK;
-    g.font = `500 ${20 * S}px Inter, sans-serif`;
+    g.font = `500 ${26 * S}px Inter, sans-serif`;
     for (const link of project.links) {
-      y = wrap(g, link.label, left, y, maxW, 32 * S, 4) + 12 * S;
+      y = wrap(g, link.label, left, y, maxW, 40 * S, 4) + 16 * S;
     }
   }
-  g.restore();
   gutterShade(g, c, -1);
-  if (!mirror) {
-    g.fillStyle = '#e4d9cc';
-    g.beginPath();
-    g.moveTo(40 * S, c.height - 168 * S);
-    g.lineTo(40 * S, c.height - 40 * S);
-    g.lineTo(168 * S, c.height - 40 * S);
-    g.closePath();
-    g.fill();
-    g.strokeStyle = 'rgba(29,27,25,.16)';
-    g.lineWidth = S;
-    g.stroke();
-  }
+  g.fillStyle = '#e4d9cc';
+  g.beginPath();
+  g.moveTo(40 * S, c.height - 168 * S);
+  g.lineTo(40 * S, c.height - 40 * S);
+  g.lineTo(168 * S, c.height - 40 * S);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(29,27,25,.16)';
+  g.lineWidth = S;
+  g.stroke();
   tex.needsUpdate = true;
 }
 
@@ -219,7 +211,7 @@ function paintCollage(page, project, images) {
   const imgs = project.images.map((url) => images.get(url)).filter(Boolean).slice(0, 6);
   const margin = 70 * S;
   const top = 64 * S;
-  const band = c.height * (imgs.length <= 1 ? 0.72 : 0.56);
+  const band = c.height * (imgs.length <= 1 ? 0.78 : 0.64);
   const region = { x: margin, y: top, w: c.width - margin * 2, h: Math.max(40, band - top) };
   const rects = slots(Math.max(imgs.length, 1), region);
   imgs.forEach((img, i) => {
@@ -410,16 +402,16 @@ export async function createDesign(renderer, { reduce, projects }) {
   let curl = 0;
   let curled = -1;
   let flipping = 0;
-  let turnT = 0;
+  let turnFrom = 0;
   let reveal = 1;
 
   const show = (i) => projects[(i + projects.length) % projects.length];
 
   function paintSettled() {
     if (!projects.length) return;
-    paintEssay(leftPage, show(index), false);
+    paintEssay(leftPage, show(index));
     paintCollage(rightPage, show(index), images);
-    paintEssay(backPage, show(index + 1), true);
+    paintEssay(backPage, show(index + 1));
     paintCollage(underPage, show(index + 1), images);
   }
 
@@ -435,7 +427,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     index = (index + dir + projects.length) % projects.length;
     const backward = dir < 0;
     flipping = 0;
-    turnT = 0;
+    turnFrom = 0;
     reveal = backward ? 1 : 0;
     curled = -1;
     applyCurl(0);
@@ -445,12 +437,12 @@ export async function createDesign(renderer, { reduce, projects }) {
   function prepareBackward() {
     const dest = show(index - 1);
     const leaving = show(index);
-    paintEssay(leftPage, dest, false);
+    paintEssay(leftPage, dest);
     paintCollage(rightPage, dest, images);
-    paintEssay(backPage, leaving, true);
+    paintEssay(backPage, leaving);
     paintCollage(underPage, leaving, images);
     flipping = -1;
-    turnT = 0;
+    turnFrom = performance.now();
     curled = -1;
     applyCurl(1);
   }
@@ -468,7 +460,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         applyCurl(0);
       }
       flipping = 1;
-      turnT = 0;
+      turnFrom = performance.now();
     }
     return true;
   }
@@ -482,23 +474,23 @@ export async function createDesign(renderer, { reduce, projects }) {
     board.geometry.translate(0, h / 2, 0);
     g.add(board);
     g.rotation.x = tilt;
-    g.position.set(PW * 0.5, -PH * 0.4, 0.02);
+    g.position.set(PW * 0.5, -0.58, 0.03);
     return g;
   }
 
   function buildMock(project) {
     const hero = project.images[Math.min(1, project.images.length - 1)] || project.images[0];
     const last = project.images[project.images.length - 1];
-    if (project.slug === 'peak-identity') return poster(project, 0.92, 1.22, 1, -0.48);
+    if (project.slug === 'peak-identity') return poster(project, 0.86, 1.12, 1, -0.34);
     if (project.slug === 'parkit-idintity') {
       const g = new THREE.Group();
       const sheet = tag(new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.74, 0.016), paperMat(texOf(last))));
       sheet.rotation.z = -0.05;
       g.add(sheet);
-      g.position.set(PW * 0.5, -PH * 0.24, 0.03);
+      g.position.set(PW * 0.5, -0.28, 0.04);
       return g;
     }
-    if (project.slug === 'brand-idintity') return poster(project, 0.5, 1.5, 0, -0.3);
+    if (project.slug === 'brand-idintity') return poster(project, 0.48, 1.35, 0, -0.26);
     if (project.slug === 'profile-design') {
       const g = new THREE.Group();
       const cover = tag(new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.1, 0.06), paperMat(texOf(project.images[0]))));
@@ -509,7 +501,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       band.position.x = -0.41;
       g.add(cover, band);
       g.rotation.z = -0.04;
-      g.position.set(PW * 0.52, -PH * 0.2, 0.05);
+      g.position.set(PW * 0.52, -0.15, 0.06);
       return g;
     }
     if (project.slug === 'video-editing') {
@@ -520,8 +512,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       bezel.geometry.translate(0, 0.35, 0);
       screen.geometry.translate(0, 0.35, 0);
       g.add(bezel, screen);
-      g.rotation.x = -0.42;
-      g.position.set(PW * 0.5, -PH * 0.38, 0.02);
+      g.rotation.x = -0.28;
+      g.position.set(PW * 0.5, -0.5, 0.03);
       return g;
     }
     if (project.slug === 'cube-design') {
@@ -532,7 +524,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       mesh.rotation.x = -0.5;
       mesh.position.z = 0.4;
       g.add(mesh);
-      g.position.set(PW * 0.52, -PH * 0.18, 0.02);
+      g.position.set(PW * 0.52, -0.08, 0.02);
       return g;
     }
     if (project.slug === 'playing-card-design') {
@@ -543,7 +535,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         card.rotation.z = -0.32 + i * 0.28;
         g.add(card);
       });
-      g.position.set(PW * 0.5, -PH * 0.22, 0.02);
+      g.position.set(PW * 0.5, -0.2, 0.03);
       return g;
     }
     if (project.slug === 'social-media-posts') {
@@ -554,9 +546,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       body.geometry.translate(0, 0.46, 0);
       screen.geometry.translate(0, 0.46, 0);
       g.add(body, screen);
-      g.rotation.x = -0.4;
+      g.rotation.x = -0.28;
       g.rotation.z = -0.06;
-      g.position.set(PW * 0.52, -PH * 0.4, 0.02);
+      g.position.set(PW * 0.52, -0.55, 0.03);
       return g;
     }
     if (project.slug === 'website-design') {
@@ -572,7 +564,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       lid.rotation.x = -1.12;
       screen.rotation.x = -1.12;
       g.add(base, lid, screen);
-      g.position.set(PW * 0.5, -PH * 0.22, 0.02);
+      g.position.set(PW * 0.5, -0.2, 0.03);
       return g;
     }
     if (project.slug === 'vest-design') {
@@ -583,13 +575,13 @@ export async function createDesign(renderer, { reduce, projects }) {
         sheet.rotation.z = -0.08 + i * 0.16;
         g.add(sheet);
       });
-      g.position.set(PW * 0.5, -PH * 0.2, 0.02);
+      g.position.set(PW * 0.5, -0.18, 0.03);
       return g;
     }
     const g = new THREE.Group();
     const sheet = tag(new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.016), paperMat(texOf(project.images[0]))));
     g.add(sheet);
-    g.position.set(PW * 0.5, -PH * 0.22, 0.03);
+    g.position.set(PW * 0.5, -0.2, 0.04);
     return g;
   }
 
@@ -639,31 +631,31 @@ export async function createDesign(renderer, { reduce, projects }) {
     const narrow = w / h < 0.9;
     camera.aspect = w / h;
     if (narrow) {
-      camera.fov = 64;
-      camera.position.set(0, 0.92, 6.65);
-      book.rotation.set(-0.5, 0, 0);
-      book.position.set(0, 0.46, 0);
-      camera.lookAt(0, 0.2, 0);
+      camera.fov = 48;
+      camera.position.set(0, 0.28, 8.5);
+      book.rotation.set(-0.18, 0, 0);
+      book.position.set(0, 0.12, 0);
+      camera.lookAt(0, 0.08, 0);
     } else {
-      camera.fov = 30;
-      camera.position.set(0, 1.18, 4.85);
-      book.rotation.set(-0.66, 0, 0);
-      book.position.set(0, 0.58, 0);
-      camera.lookAt(0, 0.16, 0);
+      camera.fov = 34;
+      camera.position.set(0, 0.46, 4.55);
+      book.rotation.set(-0.2, 0, 0);
+      book.position.set(0, 0.08, 0);
+      camera.lookAt(0, 0.04, 0);
     }
     camera.updateProjectionMatrix();
     const rx = Math.abs(book.rotation.x);
-    ground.position.y = book.position.y - Math.cos(rx) * (PH / 2) - Math.sin(rx) * 0.06 - 0.02;
+    ground.position.y = book.position.y - Math.cos(rx) * (PH / 2) - Math.sin(rx) * 0.08 - 0.03;
   }
 
-  function update(dt) {
+  function update(dt, now) {
     if (flipping && !reduce) {
-      turnT = Math.min(1, turnT + dt / TURN);
-      const e = ease(turnT);
+      const t = Math.min(1, ((now || performance.now()) - turnFrom) / (TURN * 1000));
+      const e = ease(t);
       const amount = flipping > 0 ? e : 1 - e;
       curled = -1;
       applyCurl(amount);
-      if (turnT >= 1) commit(flipping > 0 ? 1 : -1);
+      if (t >= 1) commit(flipping > 0 ? 1 : -1);
     }
     if (reveal < 1) reveal = Math.min(1, reveal + dt * 2.4);
     applyMocks();
