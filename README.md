@@ -1,61 +1,75 @@
-# AlHanouf Portfolio
+# Alhanouf Khalid
 
-A static portfolio for a ceramicist. The page is a potter’s wheel, drawn in the browser with three.js. The clay on the wheel begins as the word **hello**. Hold the foot pedal, or hold Space, and the wheel spins: the clay is pulled back into a lump, thrown into the next project’s shape, and the splatter off the wheel reveals that project’s words and images.
+Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-Two demo projects are included. Every name on the page is a placeholder.
+The page has four scenes. About is a still editorial layout. Graphic Design is a table seen from above, with an open folder in the middle and mockups of the work around it. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only. Ceramics and Exhibition currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
 
-- **Ridge Tea House** — graphic design. The clay becomes the tea-house mark.
-- **Still Water Vessels** — ceramics. The clay becomes a thrown bottle.
+**This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
-**Live demo:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
+**Original portfolio:** https://alhanoufalaswad.myportfolio.com
 
-![The potter’s wheel at rest, with the clay formed into the word hello](docs/preview.png)
+## Scenes
 
-## Interaction
+| Scene | Hash | What you see |
+| --- | --- | --- |
+| About | `#about` | Placeholder portrait, her welcome line, links |
+| Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
+| Graphic Design | `#design` | Folder pages and tabletop mockups textured with her artwork |
+| Exhibition | `#exhibition` | Gallery wall. Three sample paintings and one sample sculpture, each with a museum label |
 
-- **Pedal or Space.** Press and hold the foot pedal at the bottom of the screen, or hold Space, to spin the wheel and advance to the next project. Let go and the wheel slows.
-- **Arrows.** The on-screen arrow buttons, and the Left and Right arrow keys, step backward and forward. Each step gives the wheel a short spin.
-- **Morph.** The clay is one continuous form. It reshapes from the word hello, to the tea-house mark, to a vessel, and back to hello.
-- **Splatter.** Titles, descriptions, project facts, and images are uncovered through splatter-shaped masks as the new form settles.
-- **Also on the page.** About and Contact open from the header. Sound stays off until it is turned on. When the browser requests reduced motion, the wheel does not spin and the project changes with a crossfade.
+The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
 
-There is no build step. Paths are relative, so the same files work from a local server or from `/AlHanouf_Portfolio/` on GitHub Pages.
+The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design you can also drag the page corner to turn the page, or click the picture to see the next image in that project. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
+
+If the browser asks for reduced motion, page turns, the wheel, and the gallery dolly cut instead of animating, and the grain overlay holds still.
 
 ## Folder structure
 
 ```
-index.html                 page, header, pedal, About and Contact
-css/style.css              layout and the splatter reveal
-js/main.js                 scene, wheel, pedal, splatter, and UI
-js/clay.js                 ray-marched clay; morphs hello, mark, and vessel
-js/projects.js             the words and image list for each project
-js/vendor/three.module.js  three.js r169, vendored (no CDN)
-js/vendor/addons/          RoomEnvironment, for the studio lighting
-assets/fonts/              self-hosted Cormorant Garamond and Inter
-assets/img/                SVG project images and the favicon
-.github/workflows/pages.yml  publish to GitHub Pages
+index.html
+css/style.css
+js/main.js            scenes, hash routing, arrows
+js/ceramics.js        potter’s wheel
+js/design.js          table, mockups, page turn
+js/exhibition.js      gallery wall and labels
+js/clay.js            clay shapes for the wheel
+js/projects.js        all editable text and image lists
+js/vendor/            three.js r169, vendored
+assets/fonts/         Cormorant Garamond and Inter
+assets/img/           favicon and the portrait placeholder
+assets/projects/      her work, one folder per project
+assets/samples/       sample vessels and paintings, not her work
 ```
+
+Paths are relative, so the site works from a local server or under `/AlHanouf_Portfolio/` on GitHub Pages.
 
 ## Edit the content
 
-Open `js/projects.js` and edit the `PROJECTS` list. The first entry is the hello state. The next two are the demo projects, Ridge Tea House (`ridge`) and Still Water Vessels (`still`).
+Everything you would change is in `js/projects.js`.
 
-| Field | What to change |
-| --- | --- |
-| `label` | Name shown beside the counter while the wheel turns |
-| `eyebrow`, `title`, `desc` | Text the splatter reveals. `title` can include `<em>` and `<br>` |
-| `meta` | Pairs of `[label, value]`, or `null` when a stop has no facts |
-| `images` | `[path, caption, class]`. Paths are relative to the site root |
-| `shape` | Clay form: `0` hello, `1` tea-house mark, `2` vessel |
-| `cls` | Layout class: `hello`, `p1`, or `p2` |
+**About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-Images live in `assets/img/`. Replace a demo SVG, or add a file and point an `images` entry at it, for example `assets/img/p1-logo.svg`. Keep the paths relative.
+**Graphic design.** Each object in `DESIGN` is one spread in the folder. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project.
 
-The header name (“Studio Name”), the page title, and the About and Contact copy are the other placeholders. Those strings are in `index.html`.
+**Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
+
+```js
+{ title: '', text: '', year: '', images: ['assets/projects/example/01.webp'], shape: 2 }
+```
+
+`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. The photos open through the splatter after the wheel turns.
+
+**Exhibition.** The array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
+
+```js
+{ kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
+```
+
+`kind` is `painting` (on the wall) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The museum card prints only the fields that are present.
 
 ## Run locally
 
-Opening `index.html` with `file://` will not work: the page loads JavaScript as ES modules, and browsers block that from a file URL. Serve the folder instead:
+Opening `index.html` with `file://` will not work. The page loads JavaScript as modules, and browsers block that from a file URL.
 
 ```bash
 python3 -m http.server
@@ -65,21 +79,23 @@ Then open http://localhost:8000.
 
 ## Tech
 
-- **three.js r169**, self-hosted at `js/vendor/three.module.js` and loaded with an import map. Nothing is fetched from a CDN.
-- **RoomEnvironment** (`js/vendor/addons/RoomEnvironment.js`) supplies the image-based lighting.
-- The clay in `js/clay.js` is a ray-marched signed-distance field, so one lump can be reshaped into the next project while the wheel turns.
+- **three.js r169**, self-hosted at `js/vendor/three.module.js`, loaded with an import map. No CDN.
+- **RoomEnvironment** (`js/vendor/addons/RoomEnvironment.js`) for the lighting.
+- The clay in `js/clay.js` is a ray-marched form, so one lump can be reshaped into the next piece.
 - **Cormorant Garamond** and **Inter** are self-hosted WOFF2 files in `assets/fonts/`.
+- Each 3D scene is created the first time it is opened, and it is not drawn while another scene is showing.
 
 ## Browser
 
-The wheel needs JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough. There is no fallback canvas: without WebGL the wheel cannot render. A `<noscript>` note is shown when JavaScript is off.
+The wheel, the table, and the gallery need JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough.
 
 ## Credits and licences
 
 - **three.js r169** — Copyright © 2010–2024 three.js authors. [MIT License](js/vendor/LICENSE-three.txt).
 - **Inter** (weights 400, 500, and 800) — Copyright 2016 The Inter Project Authors. [SIL Open Font License 1.1](assets/fonts/LICENSE-Inter.txt).
 - **Cormorant Garamond** (weight 500, roman and italic) — Copyright 2015 The Cormorant Project Authors. [SIL Open Font License 1.1](assets/fonts/LICENSE-Cormorant.txt).
+- Project images and the words in `js/projects.js` are Alhanouf Khalid Alaswad’s, from [her portfolio](https://alhanoufalaswad.myportfolio.com).
 
 ## Deploy
 
-`.github/workflows/pages.yml` publishes this repository with GitHub Actions on every push to `main`, and it can also be run by hand from the Actions tab. The live site is https://hamdihudhaidh.github.io/AlHanouf_Portfolio/.
+GitHub Pages should use **Deploy from a branch**, branch `main`, folder `/ (root)`. A `.nojekyll` file is in the root so Jekyll does not rewrite the site. The Actions workflow was removed; it could not turn Pages on, and it failed on every push.

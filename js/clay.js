@@ -100,6 +100,39 @@ float sdVessel(vec3 p){
   d = min(d, max(len - r, abs(p.y-0.05)-0.05));
   return max(d, -p.y);
 }
+float bowlR(float y){
+  float r = 0.28 + 0.72 * smoothstep(0.0, 0.55, y);
+  r += 0.06 * smoothstep(0.42, 0.58, y);
+  return r;
+}
+float sdBowl(vec3 p){
+  float len = length(p.xz);
+  float r = bowlR(p.y);
+  float d = (abs(len - r) - 0.045) * 0.85;
+  d = max(d, p.y - 0.62);
+  float inner = (r - 0.07) - len;
+  inner = max(inner, 0.1 - p.y);
+  inner = max(inner, p.y - 0.55);
+  d = max(d, -inner);
+  d = min(d, max(len - 0.22, abs(p.y - 0.04) - 0.04));
+  return max(d, -p.y);
+}
+// Tall vase: narrow foot, high shoulder, long neck, flared lip. Stays inside the ray box (y < 1.55).
+float vaseR(float y){
+  float r = mix(0.14, 0.2, smoothstep(0.0, 0.06, y));
+  r += 0.38 * exp(-pow((y - 0.62) / 0.22, 2.0));
+  r = mix(r, 0.11, smoothstep(0.92, 1.22, y));
+  r += 0.2 * smoothstep(1.34, 1.52, y);
+  return r;
+}
+float sdVase(vec3 p){
+  float len = length(p.xz);
+  float r = vaseR(p.y);
+  float d = (abs(len - r) - 0.032) * 0.85;
+  d = max(d, p.y - 1.52);
+  d = min(d, max(len - 0.18, abs(p.y - 0.035) - 0.035));
+  return max(d, -p.y);
+}
 float sdLump(vec3 p){
   float y = p.y - 0.42;
   vec2 dd = vec2(length(p.xz) - 0.48 + 0.08*y, abs(y) - 0.34);
@@ -108,7 +141,9 @@ float sdLump(vec3 p){
 float sdShape(float i, vec3 p){
   if (i < 0.5) return sdTex(uHello, uHelloSize, p, 0.15, 0.07);
   if (i < 1.5) return sdTex(uMark, uMarkSize, p, 0.12, 0.05);
-  return sdVessel(p);
+  if (i < 2.5) return sdVessel(p);
+  if (i < 3.5) return sdBowl(p);
+  return sdVase(p);
 }
 float map(vec3 p){
   float t = uT;

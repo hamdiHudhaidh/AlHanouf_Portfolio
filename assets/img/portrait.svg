@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1040" role="img" aria-label="Portrait placeholder">
+  <rect width="800" height="1040" fill="#e4ddd2"/>
+  <rect x="36" y="36" width="728" height="968" fill="none" stroke="#1d1b19" stroke-opacity=".18"/>
+  <g fill="#8c4a2f">
+    <ellipse cx="400" cy="390" rx="118" ry="136"/>
+    <path d="M250 760c28-150 78-214 150-214s122 64 150 214c18 92 8 150-18 188H268c-26-38-36-96-18-188z"/>
+  </g>
+  <g fill="#1d1b19" opacity=".88">
+    <ellipse cx="400" cy="372" rx="46" ry="18"/>
+    <path d="M286 430c18 70 48 108 114 108s96-38 114-108c-30 28-68 42-114 42s-84-14-114-42z" opacity=".35"/>
+  </g>
+  <text x="400" y="860" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#1d1b19">Portrait placeholder</text>
+  <text x="400" y="898" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="3" fill="#5b554d">REPLACE THIS IMAGE</text>
+</svg>
