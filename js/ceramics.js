@@ -3,7 +3,7 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { makeTextures, makeClay } from './clay.js';
 
 const TAU = Math.PI * 2;
-const CONTACT = [[2.5, 0.9], [1.6, 0.9], [1.5, 1.5], [1.9, 1.9]];
+const CONTACT = [[2.5, 0.9], [1.6, 0.9], [1.5, 1.5], [1.9, 1.9], [1.15, 1.15]];
 
 export function createCeramics(renderer, { reduce, projects }) {
   const scene = new THREE.Scene();

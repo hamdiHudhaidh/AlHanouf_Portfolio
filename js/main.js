@@ -12,6 +12,7 @@ const loader = $('#loader');
 const canvas = $('#scene');
 const aboutEl = $('#about');
 const content = $('#content');
+const exhibitLabel = $('#exhibitLabel');
 const splats = $('#splats');
 const veil = $('#veil');
 const hud = $('#hud');
@@ -113,6 +114,27 @@ function showCards(p) {
   })));
 }
 
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function showExhibit(piece) {
+  if (current !== 'exhibition' || !piece) {
+    exhibitLabel.hidden = true;
+    exhibitLabel.innerHTML = '';
+    return;
+  }
+  const title = [piece.title, piece.year].filter(Boolean).join(', ');
+  const facts = [piece.medium, piece.dimensions].filter(Boolean).join(' · ');
+  const bits = [];
+  if (piece.artist) bits.push(`<p class="who">${esc(piece.artist)}</p>`);
+  if (title) bits.push(`<h2>${esc(title)}</h2>`);
+  if (facts) bits.push(`<p class="facts">${esc(facts)}</p>`);
+  if (piece.description) bits.push(`<p>${esc(piece.description)}</p>`);
+  exhibitLabel.innerHTML = bits.join('');
+  exhibitLabel.hidden = bits.length === 0;
+}
+
 function renderAbout() {
   const links = ARTIST.links.map((l) => `<a href="${l.href}" rel="noopener">${l.label}</a>`).join('<span aria-hidden="true">·</span>');
   aboutEl.innerHTML = `
@@ -185,6 +207,7 @@ function applyChrome() {
     if (info.hiding) hideCards();
     else showCards(info.project);
   }
+  showExhibit(current === 'exhibition' ? active?.nav()?.piece : null);
   paintHud();
   paintNav(current);
 }
@@ -315,6 +338,7 @@ function frame(now) {
         if (info?.hiding) hideCards();
         else showCards(info?.project);
       }
+      if (current === 'exhibition') showExhibit(info?.piece);
       paintHud();
     }
   }

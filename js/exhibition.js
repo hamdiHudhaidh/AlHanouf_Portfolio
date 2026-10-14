@@ -1,66 +1,28 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 
-function wrap(g, text, x, y, maxW, lineH, maxLines) {
-  const words = String(text || '').split(/\s+/).filter(Boolean);
-  if (!words.length) return y;
-  let line = '';
-  let lines = 0;
-  for (let i = 0; i < words.length; i++) {
-    const test = line ? `${line} ${words[i]}` : words[i];
-    if (g.measureText(test).width > maxW && line) {
-      g.fillText(line, x, y);
-      line = words[i];
-      y += lineH;
-      lines++;
-      if (lines >= maxLines) return y;
-    } else line = test;
+// Abstract stacked form used when a sculpture has no photograph.
+// It is a generated sample, not a record of anyone's work.
+function sampleSculpture(x) {
+  const pts = [];
+  const n = 32;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const y = t * 0.78;
+    let r = 0.07 + 0.05 * Math.sin(t * Math.PI);
+    r += 0.16 * Math.exp(-((t - 0.28) ** 2) / 0.012);
+    r += 0.1 * Math.exp(-((t - 0.62) ** 2) / 0.02);
+    if (t > 0.86) r = 0.045 + (1 - t) * 0.55;
+    pts.push(new THREE.Vector2(Math.max(0.03, r), y));
   }
-  if (line && lines < maxLines) g.fillText(line, x, y);
-  return y + lineH;
-}
-
-function labelTexture(piece) {
-  const c = document.createElement('canvas');
-  c.width = 900;
-  c.height = 520;
-  const g = c.getContext('2d');
-  g.clearRect(0, 0, c.width, c.height);
-  g.fillStyle = '#f7f1e8';
-  g.fillRect(0, 0, c.width, c.height);
-  g.strokeStyle = 'rgba(29,27,25,.2)';
-  g.strokeRect(8, 8, c.width - 16, c.height - 16);
-  g.textAlign = 'left';
-  let y = 64;
-  const artist = piece.artist || '';
-  if (artist) {
-    g.fillStyle = '#5b554d';
-    g.font = '500 28px Inter, sans-serif';
-    g.fillText(artist, 48, y);
-    y += 54;
-  }
-  g.fillStyle = '#1d1b19';
-  g.font = '500 54px Cormorant, Georgia, serif';
-  const title = [piece.title, piece.year].filter(Boolean).join(', ');
-  y = wrap(g, title, 48, y, 800, 58, 2);
-  y += 8;
-  const facts = [piece.medium, piece.dimensions].filter(Boolean).join('  ·  ');
-  if (facts) {
-    g.fillStyle = '#5b554d';
-    g.font = '400 26px Inter, sans-serif';
-    y = wrap(g, facts, 48, y, 800, 34, 2);
-    y += 10;
-  }
-  if (piece.description) {
-    g.fillStyle = '#1d1b19';
-    g.font = '400 28px Inter, sans-serif';
-    wrap(g, piece.description, 48, y, 800, 38, 4);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  t.needsUpdate = true;
-  return t;
+  const mesh = new THREE.Mesh(
+    new THREE.LatheGeometry(pts, 40),
+    new THREE.MeshStandardMaterial({ color: 0xa8603f, roughness: 0.42, metalness: 0.04 }),
+  );
+  mesh.position.set(x, 0.92, 1.15);
+  mesh.scale.setScalar(1.2);
+  mesh.castShadow = true;
+  return mesh;
 }
 
 function loadTex(url) {
@@ -155,15 +117,10 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         );
         board.position.set(x, 1.35, 1.16);
         scene.add(board);
+      } else {
+        scene.add(sampleSculpture(x));
       }
-      const lab = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.62, 0.36),
-        new THREE.MeshStandardMaterial({ map: labelTexture(p), roughness: 0.85 }),
-      );
-      lab.position.set(x, 0.28, 1.52);
-      lab.rotation.x = -0.4;
-      scene.add(lab);
-      focus.push(new THREE.Vector3(x, 1.2, 0));
+      focus.push(new THREE.Vector3(x, 1.15, 0.4));
     } else {
       const frame = new THREE.Mesh(
         new THREE.BoxGeometry(1.55, 1.9, 0.06),
@@ -179,12 +136,6 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         art.position.set(x, 2.15, 0.08);
         scene.add(art);
       }
-      const lab = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.15, 0.66),
-        new THREE.MeshStandardMaterial({ map: labelTexture(p), roughness: 0.9 }),
-      );
-      lab.position.set(x, 0.78, 0.05);
-      scene.add(lab);
       focus.push(new THREE.Vector3(x, 1.85, 0));
     }
   });
@@ -204,9 +155,13 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   const camTarget = new THREE.Vector3();
   const look = new THREE.Vector3();
   function aim(i, snap) {
-    const f = focus[Math.max(0, Math.min(focus.length - 1, i))] || new THREE.Vector3(0, 2, 0);
-    camTarget.set(f.x, narrow ? 1.55 : 1.62, narrow ? 3.15 : 4.05);
-    look.copy(f);
+    const n = Math.max(0, Math.min(focus.length - 1, i));
+    const f = focus[n] || new THREE.Vector3(0, 2, 0);
+    const sculpt = loaded[n]?.kind === 'sculpture';
+    const z = narrow ? (sculpt ? 2.35 : 3.15) : (sculpt ? 3.15 : 4.05);
+    const y = narrow ? (sculpt ? 1.22 : 1.55) : (sculpt ? 1.32 : 1.62);
+    camTarget.set(f.x, y, z);
+    look.set(f.x, sculpt ? 1.2 : f.y, sculpt ? 0.9 : f.z);
     if (snap) {
       camera.position.copy(camTarget);
       camera.lookAt(look);
@@ -250,6 +205,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       index,
       total: loaded.length,
       label: loaded[index]?.title || '',
+      piece: loaded[index] || null,
     }),
   };
 }

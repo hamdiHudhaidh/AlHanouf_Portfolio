@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes. About is a still editorial layout. Graphic Design is a table seen from above, with an open folder in the middle and mockups of the work around it. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only, so Ceramics and Exhibition are built and empty until pieces are added in `js/projects.js`. Nothing on those walls was invented.
+The page has four scenes. About is a still editorial layout. Graphic Design is a table seen from above, with an open folder in the middle and mockups of the work around it. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only. Ceramics and Exhibition currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -13,13 +13,13 @@ The page has four scenes. About is a still editorial layout. Graphic Design is a
 | Scene | Hash | What you see |
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, links |
-| Ceramics | `#ceramics` | The wheel. Published ceramic pieces, when added, morph in clay and open with a splatter |
+| Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
 | Graphic Design | `#design` | Folder pages and tabletop mockups textured with her artwork |
-| Exhibition | `#exhibition` | Gallery wall. Paintings and sculptures, when added, hang with a museum label |
+| Exhibition | `#exhibition` | Gallery wall. Three sample paintings and one sample sculpture, each with a museum label |
 
 The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
 
-The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design you can also drag the page corner to turn the page, or click the picture to see the next image in that project. About has a single view, so the arrows stay hidden. They stay hidden on Ceramics and Exhibition while those lists are empty.
+The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design you can also drag the page corner to turn the page, or click the picture to see the next image in that project. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
 
 If the browser asks for reduced motion, page turns, the wheel, and the gallery dolly cut instead of animating, and the grain overlay holds still.
 
@@ -38,6 +38,7 @@ js/vendor/            three.js r169, vendored
 assets/fonts/         Cormorant Garamond and Inter
 assets/img/           favicon and the portrait placeholder
 assets/projects/      her work, one folder per project
+assets/samples/       sample vessels and paintings, not her work
 ```
 
 Paths are relative, so the site works from a local server or under `/AlHanouf_Portfolio/` on GitHub Pages.
@@ -50,21 +51,21 @@ Everything you would change is in `js/projects.js`.
 
 **Graphic design.** Each object in `DESIGN` is one spread in the folder. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project.
 
-**Ceramics.** Add objects to `CERAMICS`:
+**Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
 
 ```js
 { title: '', text: '', year: '', images: ['assets/projects/example/01.webp'], shape: 2 }
 ```
 
-`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl. Use the closest profile to the piece. Only include year or text when you have them. The photos open through the splatter after the wheel turns.
+`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. The photos open through the splatter after the wheel turns.
 
-**Exhibition.** Add objects to `EXHIBITION`:
+**Exhibition.** The array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
 
 ```js
 { kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
 ```
 
-`kind` is `painting` (on the wall) or `sculpture` (on a plinth). Omit any field she did not give. The label prints only the fields that are present.
+`kind` is `painting` (on the wall) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The museum card prints only the fields that are present.
 
 ## Run locally
 

@@ -3,8 +3,8 @@
 // If a year, role, or medium was not published, leave it out.
 //
 // CERAMICS items: { title, text?, year?, images: [path], shape }
-//   shape 0 = the word hello, 2 = bottle, 3 = open bowl. Use the closest lathe profile.
-// EXHIBITION items: { kind: 'painting' | 'sculpture', title, image, artist?, year?, medium?, dimensions?, description? }
+//   shape 0 = the word hello, 2 = bottle, 3 = open bowl, 4 = tall vase. Use the closest lathe profile.
+// EXHIBITION items: { kind: 'painting' | 'sculpture', title, image?, artist?, year?, medium?, dimensions?, description? }
 // DESIGN items: { slug, title, text?, year?, images: [path], source, links?: [{label, href}] }
 
 export const ARTIST = {
@@ -21,11 +21,74 @@ export const ARTIST = {
   ],
 };
 
-// No ceramic pieces are published on the original portfolio.
-export const CERAMICS = [];
+// ---------------------------------------------------------------------------
+// SAMPLE PIECES — not Alhanouf's work.
+// Her site publishes no ceramics, paintings, or sculptures, so these stand-ins
+// let both scenes be tried. Every title carries "Sample". Every label says
+// "Sample piece — replace with AlHanouf's work".
+//
+// To remove them: delete this whole SAMPLE block and set
+//   export const CERAMICS = [];
+//   export const EXHIBITION = [];
+// To replace them: delete the block and put her real pieces in those arrays.
+// Do not leave a sample in the list next to a real piece, and do not name her
+// as the artist of a sample.
+// ---------------------------------------------------------------------------
+const SAMPLE = "Sample piece — replace with AlHanouf's work";
 
-// No paintings or sculptures are published on the original portfolio.
-export const EXHIBITION = [];
+export const CERAMICS = [
+  {
+    title: 'Sample bottle',
+    eyebrow: 'Sample',
+    text: SAMPLE,
+    images: ['assets/samples/vessel-bottle.webp'],
+    shape: 2,
+  },
+  {
+    title: 'Sample bowl',
+    eyebrow: 'Sample',
+    text: SAMPLE,
+    images: ['assets/samples/vessel-bowl.webp'],
+    shape: 3,
+  },
+  {
+    title: 'Sample tall vase',
+    eyebrow: 'Sample',
+    text: SAMPLE,
+    images: ['assets/samples/vessel-vase.webp'],
+    shape: 4,
+  },
+];
+
+export const EXHIBITION = [
+  {
+    kind: 'painting',
+    title: 'Sample field',
+    image: 'assets/samples/painting-field.webp',
+    artist: 'Sample',
+    description: SAMPLE,
+  },
+  {
+    kind: 'painting',
+    title: 'Sample arc',
+    image: 'assets/samples/painting-arc.webp',
+    artist: 'Sample',
+    description: SAMPLE,
+  },
+  {
+    kind: 'painting',
+    title: 'Sample grain',
+    image: 'assets/samples/painting-grain.webp',
+    artist: 'Sample',
+    description: SAMPLE,
+  },
+  {
+    kind: 'sculpture',
+    title: 'Sample form',
+    artist: 'Sample',
+    description: SAMPLE,
+  },
+];
 
 const src = (slug) => `https://alhanoufalaswad.myportfolio.com/${slug}`;
 const pics = (slug, n) => Array.from({ length: n }, (_, i) => `assets/projects/${slug}/${String(i + 1).padStart(2, '0')}.webp`);
