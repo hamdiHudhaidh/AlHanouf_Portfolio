@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes. About is a still editorial layout. Graphic Design is one large open book, a project on each spread. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only. Ceramics and Exhibition currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
+The page has four scenes. About is a still editorial layout. Graphic Design is a large bookcase, one project to a shelf. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only. Ceramics and Exhibition currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -14,12 +14,12 @@ The page has four scenes. About is a still editorial layout. Graphic Design is o
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, links |
 | Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
-| Graphic Design | `#design` | An open book. Her words on the left page, the work and a mockup on the right |
+| Graphic Design | `#design` | A bookcase. Prints and mockups on the shelves, her words on the label |
 | Exhibition | `#exhibition` | Gallery wall. Three sample paintings and one sample sculpture, each with a museum label |
 
 The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
 
-The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design, the next or previous project turns the page. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
+The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design, the next or previous project moves the camera to that shelf. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
 
 If the browser asks for reduced motion, page turns, the wheel, and the gallery dolly cut instead of animating, and the grain overlay holds still.
 
@@ -30,7 +30,7 @@ index.html
 css/style.css
 js/main.js            scenes, hash routing, arrows
 js/ceramics.js        potter’s wheel
-js/design.js          open book, mockups, page turn
+js/design.js          bookcase, shelf mockups, camera move
 js/exhibition.js      gallery wall and labels
 js/clay.js            clay shapes for the wheel
 js/projects.js        all editable text and image lists
@@ -49,7 +49,7 @@ Everything you would change is in `js/projects.js`.
 
 **About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-**Graphic design.** Each object in `DESIGN` is one spread of the book. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project.
+**Graphic design.** Each object in `DESIGN` is one shelf of the bookcase. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project. The label prints only the fields that are present.
 
 **Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
 
@@ -88,7 +88,7 @@ Then open http://localhost:8000.
 
 ## Browser
 
-The wheel, the book, and the gallery need JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough.
+The wheel, the bookcase, and the gallery need JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough.
 
 ## Credits and licences
 
