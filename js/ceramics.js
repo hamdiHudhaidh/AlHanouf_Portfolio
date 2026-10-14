@@ -20,7 +20,7 @@ export function createCeramics(renderer, { reduce, projects }) {
   const key = new THREE.DirectionalLight(0xfff1e0, 2.6);
   key.position.set(-3.5, 6, 4);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.set(2048, 2048);
   key.shadow.radius = 6;
   key.shadow.bias = -0.0004;
   Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 1, far: 20 });
@@ -79,7 +79,7 @@ export function createCeramics(renderer, { reduce, projects }) {
     }
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return t;
   }
 

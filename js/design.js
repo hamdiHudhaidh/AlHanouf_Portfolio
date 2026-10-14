@@ -48,74 +48,89 @@ function drawContain(g, img, x, y, w, h) {
   g.drawImage(img, dx, dy, dw, dh);
 }
 
-function makePageCanvas() {
+// Pages sit about 850 device pixels wide on a 1920×1080 screen at DPR 2.
+// 900×1200 was only a hair above that, and oblique filtering ate the rest.
+// 1800×2400 keeps the type and the pasted artwork sharper than the screen.
+const PAGE_W = 1800;
+const PAGE_H = 2400;
+
+function makePageCanvas(renderer) {
   const c = document.createElement('canvas');
-  c.width = 900;
-  c.height = 1200;
+  c.width = PAGE_W;
+  c.height = PAGE_H;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return { c, tex, g: c.getContext('2d') };
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return { c, tex, g };
 }
 
 function paintLeft(page, img, index, total) {
   const { c, g, tex } = page;
+  const S = c.width / 900;
   g.fillStyle = PAPER;
   g.fillRect(0, 0, c.width, c.height);
   g.strokeStyle = 'rgba(29,27,25,.08)';
-  g.strokeRect(28, 28, c.width - 56, c.height - 56);
+  g.lineWidth = S;
+  g.strokeRect(28 * S, 28 * S, c.width - 56 * S, c.height - 56 * S);
   if (img) {
     g.save();
-    roundRect(g, 64, 70, c.width - 128, c.height - 210, 8);
+    roundRect(g, 64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S, 8 * S);
     g.clip();
     g.fillStyle = '#e7e0d6';
-    g.fillRect(64, 70, c.width - 128, c.height - 210);
-    drawContain(g, img, 64, 70, c.width - 128, c.height - 210);
+    g.fillRect(64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S);
+    drawContain(g, img, 64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S);
     g.restore();
   }
   g.fillStyle = MUTED;
-  g.font = '500 22px Inter, sans-serif';
+  g.font = `500 ${22 * S}px Inter, sans-serif`;
   g.textAlign = 'left';
-  if (total > 1) g.fillText(`${String(index + 1).padStart(2, '0')}  /  ${String(total).padStart(2, '0')}`, 72, c.height - 78);
+  if (total > 1) g.fillText(`${String(index + 1).padStart(2, '0')}  /  ${String(total).padStart(2, '0')}`, 72 * S, c.height - 78 * S);
   g.textAlign = 'right';
-  g.fillText('image', c.width - 72, c.height - 78);
+  g.fillText('image', c.width - 72 * S, c.height - 78 * S);
   tex.needsUpdate = true;
 }
 
 function paintRight(page, project) {
   const { c, g, tex } = page;
+  const S = c.width / 900;
   g.fillStyle = PAPER;
   g.fillRect(0, 0, c.width, c.height);
   g.strokeStyle = 'rgba(29,27,25,.08)';
-  g.strokeRect(28, 28, c.width - 56, c.height - 56);
-  let y = 150;
+  g.lineWidth = S;
+  g.strokeRect(28 * S, 28 * S, c.width - 56 * S, c.height - 56 * S);
+  let y = 150 * S;
   g.textAlign = 'left';
   if (project.year) {
     g.fillStyle = CLAY;
-    g.font = '500 22px Inter, sans-serif';
-    g.fillText(String(project.year), 78, y);
-    y += 70;
+    g.font = `500 ${22 * S}px Inter, sans-serif`;
+    g.fillText(String(project.year), 78 * S, y);
+    y += 70 * S;
   }
   g.fillStyle = INK;
-  g.font = '500 78px Cormorant, Georgia, serif';
-  y = wrap(g, project.title, 78, y, c.width - 160, 84, 3) + 28;
+  g.font = `500 ${78 * S}px Cormorant, Georgia, serif`;
+  y = wrap(g, project.title, 78 * S, y, c.width - 160 * S, 84 * S, 3) + 28 * S;
   if (project.text) {
     g.fillStyle = MUTED;
-    g.font = '400 28px Inter, sans-serif';
-    y = wrap(g, project.text, 78, y, c.width - 160, 42, 6) + 20;
+    g.font = `400 ${28 * S}px Inter, sans-serif`;
+    y = wrap(g, project.text, 78 * S, y, c.width - 160 * S, 42 * S, 6) + 20 * S;
   }
   const links = [{ label: 'Original portfolio', href: project.source }, ...(project.links || [])];
   g.fillStyle = INK;
-  g.font = '500 22px Inter, sans-serif';
+  g.font = `500 ${22 * S}px Inter, sans-serif`;
   for (const link of links) {
-    y = wrap(g, link.label, 78, y, c.width - 160, 32, 2) + 8;
+    y = wrap(g, link.label, 78 * S, y, c.width - 160 * S, 32 * S, 2) + 8 * S;
   }
-  // dog-ear
   g.fillStyle = '#e4d9cc';
   g.beginPath();
-  g.moveTo(c.width - 36, c.height - 150);
-  g.lineTo(c.width - 36, c.height - 36);
-  g.lineTo(c.width - 150, c.height - 36);
+  g.moveTo(c.width - 36 * S, c.height - 150 * S);
+  g.lineTo(c.width - 36 * S, c.height - 36 * S);
+  g.lineTo(c.width - 150 * S, c.height - 36 * S);
   g.closePath();
   g.fill();
   g.strokeStyle = 'rgba(29,27,25,.18)';
@@ -185,7 +200,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   const key = new THREE.DirectionalLight(0xfff3e4, 2.4);
   key.position.set(-3, 7, 3);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
   key.shadow.camera.far = 24;
   key.shadow.camera.left = key.shadow.camera.bottom = -6;
@@ -218,16 +233,19 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (!img) return null;
     const t = new THREE.Texture(img);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
     t.needsUpdate = true;
     return t;
   };
 
   const PW = 1.05;
   const PH = 1.4;
-  const leftPage = makePageCanvas();
-  const rightPage = makePageCanvas();
-  const backPage = makePageCanvas();
+  const leftPage = makePageCanvas(renderer);
+  const rightPage = makePageCanvas(renderer);
+  const backPage = makePageCanvas(renderer);
   const leftMat = new THREE.MeshStandardMaterial({ map: leftPage.tex, roughness: 0.86, metalness: 0 });
   const rightMat = new THREE.MeshStandardMaterial({ map: rightPage.tex, roughness: 0.86, side: THREE.FrontSide });
   const backMat = new THREE.MeshStandardMaterial({ map: backPage.tex, roughness: 0.86, side: THREE.BackSide });

@@ -25,13 +25,16 @@ function sampleSculpture(x) {
   return mesh;
 }
 
-function loadTex(url) {
+function loadTex(url, renderer) {
   return new Promise((resolve) => {
     if (!url) { resolve(null); return; }
     const loader = new THREE.TextureLoader();
     loader.load(url, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 8;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      t.magFilter = THREE.LinearFilter;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.generateMipmaps = true;
       resolve(t);
     }, undefined, () => resolve(null));
   });
@@ -91,7 +94,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }
   scene.add(bench);
 
-  const loaded = await Promise.all(pieces.map(async (p) => ({ ...p, tex: await loadTex(p.image) })));
+  const loaded = await Promise.all(pieces.map(async (p) => ({ ...p, tex: await loadTex(p.image, renderer) })));
   const gap = 3.1;
   const focus = [];
 

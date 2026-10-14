@@ -84,6 +84,7 @@ Then open http://localhost:8000.
 - The clay in `js/clay.js` is a ray-marched form, so one lump can be reshaped into the next piece.
 - **Cormorant Garamond** and **Inter** are self-hosted WOFF2 files in `assets/fonts/`.
 - Each 3D scene is created the first time it is opened, and it is not drawn while another scene is showing.
+- The WebGL canvas is sized to the window at the display’s pixel ratio, up through 2. A 1920×1080 screen at a higher ratio steps down so the buffer stays near that size.
 
 ## Browser
 

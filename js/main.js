@@ -19,15 +19,35 @@ const hud = $('#hud');
 const sceneNav = $('#sceneNav');
 
 let renderer = null;
+
+// A canvas with no width/height is 300×150. Drawing into that and stretching
+// it across the window is what made the whole site look pixelated.
+// Stay 1:1 with the display through DPR 2 (100%, 125%, 150%, retina).
+// Step down only when the buffer would exceed a 1920×1080 screen at DPR 2.
+function drawingRatio() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const budget = 1920 * 1080 * 4;
+  let ratio = dpr;
+  const area = Math.max(1, innerWidth * innerHeight);
+  while (ratio > 1 && area * ratio * ratio > budget) ratio = Math.max(1, +(ratio - 0.25).toFixed(2));
+  return ratio;
+}
+
+function fitRenderer() {
+  if (!renderer) return;
+  renderer.setPixelRatio(drawingRatio());
+  renderer.setSize(innerWidth, innerHeight, false);
+}
+
 function getRenderer() {
   if (renderer) return renderer;
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.25 : 1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  fitRenderer();
   return renderer;
 }
 
@@ -281,7 +301,7 @@ addEventListener('pointerup', (e) => {
 });
 
 addEventListener('resize', () => {
-  if (renderer) renderer.setSize(innerWidth, innerHeight, false);
+  fitRenderer();
   active?.resize(innerWidth, innerHeight);
 });
 
