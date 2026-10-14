@@ -6,6 +6,15 @@ const INK = '#1d1b19';
 const CLAY = '#a8603f';
 const MUTED = '#5b554d';
 
+// One page fills most of a 1920×1080 view at DPR 2, so the type is drawn
+// well above the on-screen size and filtered with anisotropy.
+const PAGE_W = 2048;
+const PAGE_H = 2732;
+
+const PW = 1.78;
+const PH = 2.36;
+const TURN = 1.15;
+
 function roundRect(g, x, y, w, h, r) {
   g.beginPath();
   g.moveTo(x + r, y);
@@ -17,7 +26,7 @@ function roundRect(g, x, y, w, h, r) {
 }
 
 function wrap(g, text, x, y, maxW, lineH, maxLines) {
-  const words = String(text || '').split(/\s+/);
+  const words = String(text || '').split(/\s+/).filter(Boolean);
   let line = '';
   let lines = 0;
   for (let i = 0; i < words.length; i++) {
@@ -30,7 +39,7 @@ function wrap(g, text, x, y, maxW, lineH, maxLines) {
       if (lines >= maxLines - 1) {
         let rest = words.slice(i).join(' ');
         while (g.measureText(`${rest}…`).width > maxW && rest.length) rest = rest.slice(0, -1);
-        g.fillText(`${rest}…`, x, y);
+        g.fillText(rest.length < words.slice(i).join(' ').length ? `${rest}…` : rest, x, y);
         return y + lineH;
       }
     } else line = test;
@@ -42,17 +51,89 @@ function wrap(g, text, x, y, maxW, lineH, maxLines) {
 function drawContain(g, img, x, y, w, h) {
   const ir = img.width / img.height;
   const r = w / h;
-  let dw = w, dh = h, dx = x, dy = y;
-  if (ir > r) { dh = w / ir; dy = y + (h - dh) / 2; }
-  else { dw = h * ir; dx = x + (w - dw) / 2; }
+  let dw = w;
+  let dh = h;
+  let dx = x;
+  let dy = y;
+  if (ir > r) {
+    dh = w / ir;
+    dy = y + (h - dh) / 2;
+  } else {
+    dw = h * ir;
+    dx = x + (w - dw) / 2;
+  }
   g.drawImage(img, dx, dy, dw, dh);
 }
 
-// Pages sit about 850 device pixels wide on a 1920×1080 screen at DPR 2.
-// 900×1200 was only a hair above that, and oblique filtering ate the rest.
-// 1800×2400 keeps the type and the pasted artwork sharper than the screen.
-const PAGE_W = 1800;
-const PAGE_H = 2400;
+function paperFill(g, c, seed) {
+  g.fillStyle = PAPER;
+  g.fillRect(0, 0, c.width, c.height);
+  let s = seed;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 700; i++) {
+    const v = 160 + rnd() * 50;
+    g.fillStyle = `rgba(${v | 0},${(v - 8) | 0},${(v - 18) | 0},${0.03 + rnd() * 0.045})`;
+    g.fillRect(rnd() * c.width, rnd() * c.height, 1.5, 1.5);
+  }
+}
+
+function frame(g, c) {
+  const S = c.width / 900;
+  g.strokeStyle = 'rgba(29,27,25,.1)';
+  g.lineWidth = Math.max(1, S);
+  g.strokeRect(32 * S, 32 * S, c.width - 64 * S, c.height - 64 * S);
+}
+
+function gutterShade(g, c, side) {
+  const S = c.width / 900;
+  const depth = 110 * S;
+  const x0 = side < 0 ? c.width - depth : 0;
+  const x1 = side < 0 ? c.width : depth;
+  const grd = g.createLinearGradient(x0, 0, x1, 0);
+  const ink = 'rgba(42,38,34,.075)';
+  if (side < 0) {
+    grd.addColorStop(0, 'rgba(42,38,34,0)');
+    grd.addColorStop(1, ink);
+  } else {
+    grd.addColorStop(0, ink);
+    grd.addColorStop(1, 'rgba(42,38,34,0)');
+  }
+  g.fillStyle = grd;
+  g.fillRect(Math.min(x0, x1), 0, depth, c.height);
+}
+
+function slots(n, region) {
+  const { x, y, w, h } = region;
+  const gap = Math.max(14, w * 0.02);
+  if (n <= 1) return [{ x, y, w, h }];
+  if (n === 2) {
+    const hh = (h - gap) / 2;
+    return [
+      { x, y, w, h: hh },
+      { x, y: y + hh + gap, w, h: hh },
+    ];
+  }
+  if (n === 3) {
+    const lw = (w - gap) * 0.58;
+    const rw = w - gap - lw;
+    const hh = (h - gap) / 2;
+    return [
+      { x, y, w: lw, h },
+      { x: x + lw + gap, y, w: rw, h: hh },
+      { x: x + lw + gap, y: y + hh + gap, w: rw, h: hh },
+    ];
+  }
+  const rows = Math.ceil(n / 2);
+  const cw = (w - gap) / 2;
+  const rh = (h - gap * (rows - 1)) / rows;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    out.push({ x: x + col * (cw + gap), y: y + row * (rh + gap), w: cw, h: rh });
+  }
+  return out;
+}
 
 function makePageCanvas(renderer) {
   const c = document.createElement('canvas');
@@ -70,71 +151,89 @@ function makePageCanvas(renderer) {
   return { c, tex, g };
 }
 
-function paintLeft(page, img, index, total) {
+function paintEssay(page, project, mirror) {
   const { c, g, tex } = page;
   const S = c.width / 900;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, c.width, c.height);
-  g.strokeStyle = 'rgba(29,27,25,.08)';
-  g.lineWidth = S;
-  g.strokeRect(28 * S, 28 * S, c.width - 56 * S, c.height - 56 * S);
-  if (img) {
-    g.save();
-    roundRect(g, 64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S, 8 * S);
-    g.clip();
-    g.fillStyle = '#e7e0d6';
-    g.fillRect(64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S);
-    drawContain(g, img, 64 * S, 70 * S, c.width - 128 * S, c.height - 210 * S);
-    g.restore();
+  paperFill(g, c, mirror ? 3 : 5);
+  frame(g, c);
+  g.save();
+  if (mirror) {
+    g.translate(c.width, 0);
+    g.scale(-1, 1);
   }
-  g.fillStyle = MUTED;
-  g.font = `500 ${22 * S}px Inter, sans-serif`;
+  const left = 92 * S;
+  const maxW = c.width - 184 * S;
+  let y = 168 * S;
   g.textAlign = 'left';
-  if (total > 1) g.fillText(`${String(index + 1).padStart(2, '0')}  /  ${String(total).padStart(2, '0')}`, 72 * S, c.height - 78 * S);
-  g.textAlign = 'right';
-  g.fillText('image', c.width - 72 * S, c.height - 78 * S);
+  g.textBaseline = 'alphabetic';
+  if (project.year) {
+    g.fillStyle = CLAY;
+    g.font = `500 ${20 * S}px Inter, sans-serif`;
+    g.fillText(String(project.year), left, y);
+    y += 78 * S;
+  }
+  g.fillStyle = INK;
+  g.font = `500 ${64 * S}px Cormorant, Georgia, serif`;
+  y = wrap(g, project.title, left, y, maxW, 76 * S, 3) + 18 * S;
+  g.strokeStyle = CLAY;
+  g.lineWidth = 2.5 * S;
+  g.beginPath();
+  g.moveTo(left, y);
+  g.lineTo(left + 78 * S, y);
+  g.stroke();
+  y += 52 * S;
+  if (project.text) {
+    g.fillStyle = MUTED;
+    g.font = `400 ${26 * S}px Inter, sans-serif`;
+    y = wrap(g, project.text, left, y, maxW, 42 * S, 8) + 28 * S;
+  }
+  if (project.links?.length) {
+    g.fillStyle = INK;
+    g.font = `500 ${20 * S}px Inter, sans-serif`;
+    for (const link of project.links) {
+      y = wrap(g, link.label, left, y, maxW, 32 * S, 4) + 12 * S;
+    }
+  }
+  g.restore();
+  gutterShade(g, c, -1);
+  if (!mirror) {
+    g.fillStyle = '#e4d9cc';
+    g.beginPath();
+    g.moveTo(40 * S, c.height - 168 * S);
+    g.lineTo(40 * S, c.height - 40 * S);
+    g.lineTo(168 * S, c.height - 40 * S);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = 'rgba(29,27,25,.16)';
+    g.lineWidth = S;
+    g.stroke();
+  }
   tex.needsUpdate = true;
 }
 
-function paintRight(page, project) {
+function paintCollage(page, project, images) {
   const { c, g, tex } = page;
   const S = c.width / 900;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, c.width, c.height);
-  g.strokeStyle = 'rgba(29,27,25,.08)';
-  g.lineWidth = S;
-  g.strokeRect(28 * S, 28 * S, c.width - 56 * S, c.height - 56 * S);
-  let y = 150 * S;
-  g.textAlign = 'left';
-  if (project.year) {
-    g.fillStyle = CLAY;
-    g.font = `500 ${22 * S}px Inter, sans-serif`;
-    g.fillText(String(project.year), 78 * S, y);
-    y += 70 * S;
-  }
-  g.fillStyle = INK;
-  g.font = `500 ${78 * S}px Cormorant, Georgia, serif`;
-  y = wrap(g, project.title, 78 * S, y, c.width - 160 * S, 84 * S, 3) + 28 * S;
-  if (project.text) {
-    g.fillStyle = MUTED;
-    g.font = `400 ${28 * S}px Inter, sans-serif`;
-    y = wrap(g, project.text, 78 * S, y, c.width - 160 * S, 42 * S, 6) + 20 * S;
-  }
-  const links = [{ label: 'Original portfolio', href: project.source }, ...(project.links || [])];
-  g.fillStyle = INK;
-  g.font = `500 ${22 * S}px Inter, sans-serif`;
-  for (const link of links) {
-    y = wrap(g, link.label, 78 * S, y, c.width - 160 * S, 32 * S, 2) + 8 * S;
-  }
-  g.fillStyle = '#e4d9cc';
-  g.beginPath();
-  g.moveTo(c.width - 36 * S, c.height - 150 * S);
-  g.lineTo(c.width - 36 * S, c.height - 36 * S);
-  g.lineTo(c.width - 150 * S, c.height - 36 * S);
-  g.closePath();
-  g.fill();
-  g.strokeStyle = 'rgba(29,27,25,.18)';
-  g.stroke();
+  paperFill(g, c, 11);
+  frame(g, c);
+  const imgs = project.images.map((url) => images.get(url)).filter(Boolean).slice(0, 6);
+  const margin = 70 * S;
+  const top = 64 * S;
+  const band = c.height * (imgs.length <= 1 ? 0.72 : 0.56);
+  const region = { x: margin, y: top, w: c.width - margin * 2, h: Math.max(40, band - top) };
+  const rects = slots(Math.max(imgs.length, 1), region);
+  imgs.forEach((img, i) => {
+    const r = rects[i];
+    if (!r) return;
+    g.save();
+    roundRect(g, r.x, r.y, r.w, r.h, 10 * S);
+    g.clip();
+    g.fillStyle = '#e6dfd4';
+    g.fillRect(r.x, r.y, r.w, r.h);
+    drawContain(g, img, r.x, r.y, r.w, r.h);
+    g.restore();
+  });
+  gutterShade(g, c, 1);
   tex.needsUpdate = true;
 }
 
@@ -147,24 +246,6 @@ function loadImage(url) {
   });
 }
 
-function paperTex() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#d5cdc1';
-  g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 1800; i++) {
-    const v = 180 + Math.random() * 50;
-    g.fillStyle = `rgba(${v},${v - 8},${v - 16},${Math.random() * 0.15})`;
-    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(6, 4);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 function curlGeo(geo, amount) {
   const base = geo.userData.base;
   const pos = geo.attributes.position;
@@ -172,399 +253,420 @@ function curlGeo(geo, amount) {
   for (let i = 0; i < pos.count; i++) {
     const x0 = base[i * 3];
     const y0 = base[i * 3 + 1];
-    const u = Math.min(1, Math.max(0, x0 / w));
-    const a = amount * Math.PI * Math.pow(u, 0.62);
-    pos.setXYZ(i, Math.cos(a) * x0, y0, Math.sin(a) * x0);
+    const z0 = base[i * 3 + 2];
+    const u = x0 <= 0 ? 0 : Math.min(1, x0 / w);
+    const a = amount * Math.PI * Math.pow(u, 0.58);
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    pos.setXYZ(i, c * x0 - s * z0, y0, s * x0 + c * z0);
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
 }
 
 function pageGeo(w, h, side) {
-  const geo = new THREE.PlaneGeometry(w, h, 22, 8);
+  const geo = new THREE.PlaneGeometry(w, h, 40, 8);
   geo.translate(side * w / 2, 0, 0);
   geo.userData.base = Float32Array.from(geo.attributes.position.array);
   return geo;
+}
+
+function ease(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
+}
+
+function smoothstep(t) {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
 }
 
 export async function createDesign(renderer, { reduce, projects }) {
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e8e1d6');
   scene.background = BG;
-  scene.fog = new THREE.Fog(BG, 11, 22);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.45;
+  scene.environmentIntensity = 0.5;
 
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
-  const key = new THREE.DirectionalLight(0xfff3e4, 2.4);
-  key.position.set(-3, 7, 3);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.08, 40);
+  const key = new THREE.DirectionalLight(0xfff4e6, 2.55);
+  key.position.set(-3.2, 7.2, 4.4);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 24;
-  key.shadow.camera.left = key.shadow.camera.bottom = -6;
-  key.shadow.camera.right = key.shadow.camera.top = 6;
-  scene.add(key);
-  scene.add(new THREE.DirectionalLight(0xd5deea, 0.45).translateX(4).translateY(3).translateZ(-2));
-  scene.add(new THREE.HemisphereLight(0xfff8ee, 0xb7ab9c, 0.7));
+  key.shadow.bias = -0.0006;
+  key.shadow.normalBias = 0.025;
+  key.shadow.camera.near = 0.5;
+  key.shadow.camera.far = 22;
+  key.shadow.camera.left = key.shadow.camera.bottom = -4.5;
+  key.shadow.camera.right = key.shadow.camera.top = 4.5;
+  key.target.position.set(0, 0.35, 0);
+  scene.add(key, key.target);
+  const fill = new THREE.DirectionalLight(0xd7e0ea, 0.55);
+  fill.position.set(4.2, 2.4, 3);
+  scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0xfff8ee, 0xb7ab9c, 0.72));
 
-  const table = new THREE.Mesh(
-    new THREE.BoxGeometry(7.2, 0.12, 5.2),
-    new THREE.MeshStandardMaterial({ map: paperTex(), color: 0xe7dfd4, roughness: 0.92 }),
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(16, 16),
+    new THREE.ShadowMaterial({ opacity: 0.22 }),
   );
-  table.position.y = -0.06;
-  table.receiveShadow = true;
-  scene.add(table);
-  const edge = new THREE.Mesh(
-    new THREE.BoxGeometry(7.28, 0.08, 5.28),
-    new THREE.MeshStandardMaterial({ color: 0xc9bfb2, roughness: 0.8 }),
-  );
-  edge.position.y = -0.14;
-  scene.add(edge);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
 
   const images = new Map();
   await Promise.all(projects.flatMap((p) => p.images.map(async (url) => {
     if (!images.has(url)) images.set(url, await loadImage(url));
   })));
 
-  const texOf = (url) => {
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  function texOf(url) {
     const img = images.get(url);
     if (!img) return null;
     const t = new THREE.Texture(img);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.anisotropy = maxAniso;
     t.magFilter = THREE.LinearFilter;
     t.minFilter = THREE.LinearMipmapLinearFilter;
     t.generateMipmaps = true;
     t.needsUpdate = true;
     return t;
-  };
+  }
 
-  const PW = 1.05;
-  const PH = 1.4;
+  function paperMat(map) {
+    return new THREE.MeshStandardMaterial({
+      map: map || null,
+      color: map ? 0xffffff : 0xe7e0d6,
+      roughness: 0.62,
+      metalness: 0,
+    });
+  }
+  function darkMat() {
+    return new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.42, metalness: 0.32 });
+  }
+  function tag(mesh) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mats.forEach((m) => { m.userData.fade = true; });
+    return mesh;
+  }
+
   const leftPage = makePageCanvas(renderer);
   const rightPage = makePageCanvas(renderer);
   const backPage = makePageCanvas(renderer);
-  const leftMat = new THREE.MeshStandardMaterial({ map: leftPage.tex, roughness: 0.86, metalness: 0 });
-  const rightMat = new THREE.MeshStandardMaterial({ map: rightPage.tex, roughness: 0.86, side: THREE.FrontSide });
-  const backMat = new THREE.MeshStandardMaterial({ map: backPage.tex, roughness: 0.86, side: THREE.BackSide });
+  const underPage = makePageCanvas(renderer);
+  const pageMat = (tex, side) => new THREE.MeshStandardMaterial({
+    map: tex,
+    roughness: 0.92,
+    metalness: 0,
+    side,
+  });
 
   const book = new THREE.Group();
-  book.rotation.x = -Math.PI / 2;
-  book.position.y = 0.012;
   scene.add(book);
 
-  const cover = new THREE.Mesh(
-    new THREE.BoxGeometry(PW * 2 + 0.08, PH + 0.08, 0.025),
-    new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.55 }),
-  );
-  cover.position.z = -0.02;
-  book.add(cover);
-
-  const leftGeo = pageGeo(PW, PH, -1);
-  const leftMesh = new THREE.Mesh(leftGeo, leftMat);
-  leftMesh.castShadow = true;
-  leftMesh.receiveShadow = true;
-  book.add(leftMesh);
-
-  const rightGeo = pageGeo(PW, PH, 1);
-  const rightMesh = new THREE.Mesh(rightGeo, rightMat);
-  const backMesh = new THREE.Mesh(rightGeo, backMat);
-  rightMesh.castShadow = true;
-  rightMesh.receiveShadow = true;
-  book.add(rightMesh, backMesh);
+  const paperStack = new THREE.MeshStandardMaterial({ color: 0xe7dfd4, roughness: 0.94 });
+  const coverMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.58 });
+  [-1, 1].forEach((sign) => {
+    for (let i = 0; i < 4; i++) {
+      const sheet = new THREE.Mesh(new THREE.BoxGeometry(PW - 0.02, PH - 0.02, 0.007), paperStack);
+      sheet.position.set(sign * PW / 2, 0, -0.006 - i * 0.008);
+      sheet.receiveShadow = true;
+      book.add(sheet);
+    }
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(PW + 0.04, PH + 0.055, 0.024), coverMat);
+    cover.position.set(sign * PW / 2, 0, -0.05);
+    cover.castShadow = true;
+    cover.receiveShadow = true;
+    book.add(cover);
+  });
 
   const spine = new THREE.Mesh(
-    new THREE.BoxGeometry(0.035, PH, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0x8c4a2f, roughness: 0.45 }),
+    new THREE.BoxGeometry(0.058, PH + 0.055, 0.078),
+    new THREE.MeshStandardMaterial({ color: 0x8c4a2f, roughness: 0.48 }),
   );
+  spine.position.set(0, 0, -0.02);
+  spine.castShadow = true;
   book.add(spine);
 
+  const leftGeo = pageGeo(PW, PH, -1);
+  const rightGeo = pageGeo(PW, PH, 1);
+  const underGeo = pageGeo(PW, PH, 1);
+  const leftMesh = new THREE.Mesh(leftGeo, pageMat(leftPage.tex, THREE.FrontSide));
+  const rightMesh = new THREE.Mesh(rightGeo, pageMat(rightPage.tex, THREE.FrontSide));
+  const backMesh = new THREE.Mesh(rightGeo, pageMat(backPage.tex, THREE.BackSide));
+  const underMesh = new THREE.Mesh(underGeo, pageMat(underPage.tex, THREE.FrontSide));
+  leftMesh.position.z = 0.012;
+  rightMesh.position.z = backMesh.position.z = 0.02;
+  underMesh.position.z = 0.004;
+  [leftMesh, rightMesh, backMesh, underMesh].forEach((m) => {
+    m.castShadow = true;
+    m.receiveShadow = true;
+    book.add(m);
+  });
+
   let index = 0;
-  let photo = 0;
   let curl = 0;
-  let curlTo = 0;
+  let curled = -1;
   let flipping = 0;
-  let pending = 0;
+  let turnT = 0;
+  let reveal = 1;
 
-  function project(i) { return projects[(i + projects.length) % projects.length]; }
-  function imgAt(p, n) { return images.get(p.images[n] || p.images[0]) || null; }
+  const show = (i) => projects[(i + projects.length) % projects.length];
 
-  function redraw() {
-    const p = project(index);
-    const n = p.images.length;
-    photo = ((photo % n) + n) % n;
-    paintLeft(leftPage, imgAt(p, photo), photo, n);
-    paintRight(rightPage, p);
-    const nxt = project(index + (flipping < 0 ? -1 : 1));
-    paintLeft(backPage, imgAt(nxt, 0), 0, nxt.images.length);
+  function paintSettled() {
+    if (!projects.length) return;
+    paintEssay(leftPage, show(index), false);
+    paintCollage(rightPage, show(index), images);
+    paintEssay(backPage, show(index + 1), true);
+    paintCollage(underPage, show(index + 1), images);
   }
-  redraw();
+
+  function applyCurl(amount) {
+    curl = amount;
+    if (amount !== curled) {
+      curlGeo(rightGeo, reduce ? 0 : amount);
+      curled = amount;
+    }
+  }
 
   function commit(dir) {
     index = (index + dir + projects.length) % projects.length;
-    photo = 0;
-    curl = 0;
-    curlTo = 0;
+    const backward = dir < 0;
     flipping = 0;
-    curlGeo(rightGeo, 0);
-    redraw();
-    markActive();
+    turnT = 0;
+    reveal = backward ? 1 : 0;
+    curled = -1;
+    applyCurl(0);
+    paintSettled();
+  }
+
+  function prepareBackward() {
+    const dest = show(index - 1);
+    const leaving = show(index);
+    paintEssay(leftPage, dest, false);
+    paintCollage(rightPage, dest, images);
+    paintEssay(backPage, leaving, true);
+    paintCollage(underPage, leaving, images);
+    flipping = -1;
+    turnT = 0;
+    curled = -1;
+    applyCurl(1);
   }
 
   function step(dir) {
     if (!projects.length || flipping) return false;
-    if (reduce) { commit(dir); return true; }
-    flipping = dir;
-    if (dir < 0) {
-      index = (index - 1 + projects.length) % projects.length;
-      photo = 0;
-      redraw();
-      curl = 1;
-      curlTo = 0;
-      curlGeo(rightGeo, 1);
-    } else {
-      curlTo = 1;
-      redraw();
+    if (reduce) {
+      commit(dir);
+      return true;
+    }
+    if (dir < 0) prepareBackward();
+    else {
+      if (curl > 0.001) {
+        curled = -1;
+        applyCurl(0);
+      }
+      flipping = 1;
+      turnT = 0;
     }
     return true;
   }
 
-  function cyclePhoto(dir) {
-    const p = project(index);
-    if (p.images.length < 2 || flipping) return;
-    photo = (photo + dir + p.images.length) % p.images.length;
-    paintLeft(leftPage, imgAt(p, photo), photo, p.images.length);
-  }
-
-  const mockups = [];
-  function addMock(slug, mesh) {
-    mesh.userData.slug = slug;
-    mesh.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    scene.add(mesh);
-    mockups.push(mesh);
-  }
-
-  function framed(tex, w, h, d = 0.02) {
+  function poster(project, w, h, imgIndex, tilt) {
     const g = new THREE.Group();
-    const face = new THREE.Mesh(
-      new THREE.BoxGeometry(w, d, h),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.62, color: 0xffffff }),
-    );
-    g.add(face);
+    const board = tag(new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, 0.02),
+      paperMat(texOf(project.images[imgIndex] || project.images[0])),
+    ));
+    board.geometry.translate(0, h / 2, 0);
+    g.add(board);
+    g.rotation.x = tilt;
+    g.position.set(PW * 0.5, -PH * 0.4, 0.02);
     return g;
   }
 
-  const place = {
-    'peak-identity': () => {
-      const g = framed(texOf(projects.find((p) => p.slug === 'peak-identity').images[1] || projects[0].images[0]), 0.72, 0.96);
-      g.position.set(-1.85, 0.03, -1.15);
-      g.rotation.y = 0.28;
-      return g;
-    },
-    'parkit-idintity': () => {
-      const p = projects.find((x) => x.slug === 'parkit-idintity');
-      const g = framed(texOf(p.images[0]), 0.78, 0.52);
-      g.position.set(1.9, 0.03, -1.2);
-      g.rotation.y = -0.4;
-      return g;
-    },
-    'brand-idintity': () => {
-      const p = projects.find((x) => x.slug === 'brand-idintity');
-      const g = framed(texOf(p.images[0]), 0.34, 1.15);
-      g.position.set(-2.15, 0.03, 0.15);
-      g.rotation.y = 0.5;
-      return g;
-    },
-    'profile-design': () => {
-      const p = projects.find((x) => x.slug === 'profile-design');
+  function buildMock(project) {
+    const hero = project.images[Math.min(1, project.images.length - 1)] || project.images[0];
+    const last = project.images[project.images.length - 1];
+    if (project.slug === 'peak-identity') return poster(project, 0.92, 1.22, 1, -0.48);
+    if (project.slug === 'parkit-idintity') {
       const g = new THREE.Group();
-      const coverM = new THREE.Mesh(
-        new THREE.BoxGeometry(0.78, 0.045, 0.56),
-        new THREE.MeshStandardMaterial({ map: texOf(p.images[0]), roughness: 0.55 }),
-      );
-      g.add(coverM);
-      g.position.set(-1.55, 0.04, 1.25);
-      g.rotation.y = 0.25;
+      const sheet = tag(new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.74, 0.016), paperMat(texOf(last))));
+      sheet.rotation.z = -0.05;
+      g.add(sheet);
+      g.position.set(PW * 0.5, -PH * 0.24, 0.03);
       return g;
-    },
-    'cube-design': () => {
-      const p = projects.find((x) => x.slug === 'cube-design');
-      const mat = new THREE.MeshStandardMaterial({ map: texOf(p.images[1] || p.images[0]), roughness: 0.45 });
-      const g = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.46), mat);
-      g.position.set(1.85, 0.28, 0.15);
-      g.rotation.y = 0.6;
-      return g;
-    },
-    'playing-card-design': () => {
-      const p = projects.find((x) => x.slug === 'playing-card-design');
-      const g = new THREE.Group();
-      p.images.slice(0, 3).forEach((url, i) => {
-        const c = new THREE.Mesh(
-          new THREE.BoxGeometry(0.34, 0.012, 0.5),
-          new THREE.MeshStandardMaterial({ map: texOf(url), roughness: 0.5 }),
-        );
-        c.position.set(i * 0.05, i * 0.014, i * 0.02);
-        c.rotation.y = -0.35 + i * 0.18;
-        g.add(c);
-      });
-      g.position.set(1.35, 0.02, 1.2);
-      return g;
-    },
-    'social-media-posts': () => {
-      const p = projects.find((x) => x.slug === 'social-media-posts');
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.36, 0.028, 0.68),
-        new THREE.MeshStandardMaterial({ color: 0x1c1a18, roughness: 0.4, metalness: 0.4 }),
-      );
-      const screen = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.3, 0.58),
-        new THREE.MeshStandardMaterial({ map: texOf(p.images[1] || p.images[0]), roughness: 0.4 }),
-      );
-      screen.rotation.x = -Math.PI / 2;
-      screen.position.y = 0.016;
-      g.add(body, screen);
-      g.position.set(0.15, 0.02, -1.45);
-      g.rotation.y = -0.15;
-      return g;
-    },
-    'website-design': () => {
-      const p = projects.find((x) => x.slug === 'website-design');
-      const g = new THREE.Group();
-      const base = new THREE.Mesh(
-        new THREE.BoxGeometry(0.92, 0.025, 0.6),
-        new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.45, metalness: 0.3 }),
-      );
-      const lid = new THREE.Mesh(
-        new THREE.BoxGeometry(0.92, 0.5, 0.02),
-        new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.45 }),
-      );
-      const screen = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.82, 0.42),
-        new THREE.MeshStandardMaterial({ map: texOf(p.images[0]), roughness: 0.4 }),
-      );
-      lid.position.set(0, 0.26, -0.28);
-      lid.rotation.x = -0.7;
-      screen.position.set(0, 0.26, -0.26);
-      screen.rotation.x = -0.7;
-      g.add(base, lid, screen);
-      g.position.set(1.7, 0.03, 0.95);
-      g.rotation.y = -0.5;
-      return g;
-    },
-    'video-editing': () => {
-      const p = projects.find((x) => x.slug === 'video-editing');
-      const g = framed(texOf(p.images[0]), 0.7, 0.46);
-      g.position.set(-0.35, 0.03, 1.45);
-      g.rotation.y = 0.1;
-      return g;
-    },
-    'vest-design': () => {
-      const p = projects.find((x) => x.slug === 'vest-design');
-      const g = framed(texOf(p.images[0]), 0.62, 0.62, 0.012);
-      g.position.set(-1.95, 0.02, 1.05);
-      g.rotation.y = 0.2;
-      return g;
-    },
-  };
-
-  for (const p of projects) {
-    const make = place[p.slug];
-    if (make) addMock(p.slug, make());
-  }
-
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.42, 0.48, 40),
-    new THREE.MeshBasicMaterial({ color: 0xa8603f, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.02;
-  scene.add(ring);
-
-  function markActive() {
-    const slug = project(index).slug;
-    mockups.forEach((m) => { m.userData.lift = m.userData.slug === slug ? 0.07 : 0; });
-  }
-  markActive();
-
-  let drag = null;
-  const ray = new THREE.Raycaster();
-  const ndc = new THREE.Vector2();
-  function hitPage(ev) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-    ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-    ray.setFromCamera(ndc, camera);
-    return ray.intersectObject(rightMesh, false)[0] || null;
-  }
-
-  function pointerDown(ev) {
-    const hit = hitPage(ev);
-    if (!hit) return false;
-    const local = rightMesh.worldToLocal(hit.point.clone());
-    const corner = local.x > PW * 0.62;
-    drag = { x: ev.clientX, y: ev.clientY, corner, moved: false };
-    return corner ? 'corner' : 'page';
-  }
-  function pointerMove(ev) {
-    if (!drag?.corner || flipping) return;
-    const dx = drag.x - ev.clientX;
-    drag.moved = true;
-    curlTo = Math.min(1, Math.max(0, dx / 280));
-    curl = curlTo;
-  }
-  function pointerUp(ev) {
-    if (!drag) return false;
-    const dx = drag.x - ev.clientX;
-    const dy = Math.abs(ev.clientY - drag.y);
-    const was = drag;
-    drag = null;
-    if (was.corner) {
-      if (curl > 0.34) { flipping = 1; curlTo = 1; }
-      else curlTo = 0;
-      return true;
     }
-    if (Math.hypot(dx, dy) < 8) cyclePhoto(1);
-    return false;
+    if (project.slug === 'brand-idintity') return poster(project, 0.5, 1.5, 0, -0.3);
+    if (project.slug === 'profile-design') {
+      const g = new THREE.Group();
+      const cover = tag(new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.1, 0.06), paperMat(texOf(project.images[0]))));
+      const band = tag(new THREE.Mesh(
+        new THREE.BoxGeometry(0.028, 1.1, 0.064),
+        new THREE.MeshStandardMaterial({ color: 0x8c4a2f, roughness: 0.45 }),
+      ));
+      band.position.x = -0.41;
+      g.add(cover, band);
+      g.rotation.z = -0.04;
+      g.position.set(PW * 0.52, -PH * 0.2, 0.05);
+      return g;
+    }
+    if (project.slug === 'video-editing') {
+      const g = new THREE.Group();
+      const bezel = tag(new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.7, 0.045), darkMat()));
+      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.56), paperMat(texOf(project.images[0]))));
+      screen.position.z = 0.026;
+      bezel.geometry.translate(0, 0.35, 0);
+      screen.geometry.translate(0, 0.35, 0);
+      g.add(bezel, screen);
+      g.rotation.x = -0.42;
+      g.position.set(PW * 0.5, -PH * 0.38, 0.02);
+      return g;
+    }
+    if (project.slug === 'cube-design') {
+      const g = new THREE.Group();
+      const mesh = tag(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), paperMat(texOf(hero))));
+      mesh.rotation.order = 'YXZ';
+      mesh.rotation.y = 0.68;
+      mesh.rotation.x = -0.5;
+      mesh.position.z = 0.4;
+      g.add(mesh);
+      g.position.set(PW * 0.52, -PH * 0.18, 0.02);
+      return g;
+    }
+    if (project.slug === 'playing-card-design') {
+      const g = new THREE.Group();
+      project.images.slice(0, 3).forEach((url, i) => {
+        const card = tag(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.74, 0.012), paperMat(texOf(url))));
+        card.position.set((i - 1) * 0.18, -0.02 * i, 0.02 + i * 0.015);
+        card.rotation.z = -0.32 + i * 0.28;
+        g.add(card);
+      });
+      g.position.set(PW * 0.5, -PH * 0.22, 0.02);
+      return g;
+    }
+    if (project.slug === 'social-media-posts') {
+      const g = new THREE.Group();
+      const body = tag(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.92, 0.04), darkMat()));
+      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.76), paperMat(texOf(hero))));
+      screen.position.z = 0.024;
+      body.geometry.translate(0, 0.46, 0);
+      screen.geometry.translate(0, 0.46, 0);
+      g.add(body, screen);
+      g.rotation.x = -0.4;
+      g.rotation.z = -0.06;
+      g.position.set(PW * 0.52, -PH * 0.4, 0.02);
+      return g;
+    }
+    if (project.slug === 'website-design') {
+      const g = new THREE.Group();
+      const base = tag(new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.76, 0.03), darkMat()));
+      const lid = tag(new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.64, 0.024), darkMat()));
+      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(1.02, 0.52), paperMat(texOf(project.images[0]))));
+      lid.geometry.translate(0, 0.32, 0);
+      screen.geometry.translate(0, 0.32, 0);
+      base.position.set(0, -0.08, 0.02);
+      lid.position.set(0, 0.3, 0.03);
+      screen.position.set(0, 0.3, 0.046);
+      lid.rotation.x = -1.12;
+      screen.rotation.x = -1.12;
+      g.add(base, lid, screen);
+      g.position.set(PW * 0.5, -PH * 0.22, 0.02);
+      return g;
+    }
+    if (project.slug === 'vest-design') {
+      const g = new THREE.Group();
+      project.images.slice(0, 2).forEach((url, i) => {
+        const sheet = tag(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.98, 0.012), paperMat(texOf(url))));
+        sheet.position.set((i - 0.5) * 0.22, i * 0.05, 0.016 + i * 0.014);
+        sheet.rotation.z = -0.08 + i * 0.16;
+        g.add(sheet);
+      });
+      g.position.set(PW * 0.5, -PH * 0.2, 0.02);
+      return g;
+    }
+    const g = new THREE.Group();
+    const sheet = tag(new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.016), paperMat(texOf(project.images[0]))));
+    g.add(sheet);
+    g.position.set(PW * 0.5, -PH * 0.22, 0.03);
+    return g;
   }
 
-  let narrow = false;
+  const mockups = new Map();
+  for (const project of projects) {
+    const g = buildMock(project);
+    book.add(g);
+    mockups.set(project.slug, g);
+  }
+
+  function mockState() {
+    if (!projects.length) return { slug: '', weight: 0 };
+    if (flipping < 0) {
+      if (curl > 0.42) {
+        return { slug: show(index).slug, weight: smoothstep((curl - 0.42) / 0.58) };
+      }
+      return { slug: show(index - 1).slug, weight: smoothstep(1 - curl / 0.42) };
+    }
+    const settled = flipping > 0 ? 1 : reveal;
+    return { slug: show(index).slug, weight: (1 - smoothstep(Math.min(1, curl / 0.72))) * settled };
+  }
+
+  function applyMocks() {
+    const { slug, weight } = mockState();
+    for (const [key, g] of mockups) {
+      const w = key === slug ? weight : 0;
+      g.visible = w > 0.03;
+      g.scale.setScalar(g.visible ? 0.92 + 0.08 * w : 1);
+      g.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          if (!m.userData.fade) continue;
+          m.opacity = w;
+          m.transparent = w < 0.98;
+          m.depthWrite = w > 0.45;
+        }
+        o.castShadow = w > 0.65;
+      });
+    }
+  }
+
+  paintSettled();
+  applyMocks();
+
   function resize(w, h) {
-    narrow = w / h < 0.9;
+    const narrow = w / h < 0.9;
     camera.aspect = w / h;
-    camera.fov = narrow ? 33 : 28;
-    if (narrow) camera.position.set(0, 4.05, 0.42);
-    else camera.position.set(0.04, 5.35, 1.7);
-    camera.lookAt(0, 0, narrow ? 0.05 : 0);
+    if (narrow) {
+      camera.fov = 64;
+      camera.position.set(0, 0.92, 6.65);
+      book.rotation.set(-0.5, 0, 0);
+      book.position.set(0, 0.46, 0);
+      camera.lookAt(0, 0.2, 0);
+    } else {
+      camera.fov = 30;
+      camera.position.set(0, 1.18, 4.85);
+      book.rotation.set(-0.66, 0, 0);
+      book.position.set(0, 0.58, 0);
+      camera.lookAt(0, 0.16, 0);
+    }
     camera.updateProjectionMatrix();
+    const rx = Math.abs(book.rotation.x);
+    ground.position.y = book.position.y - Math.cos(rx) * (PH / 2) - Math.sin(rx) * 0.06 - 0.02;
   }
 
   function update(dt) {
-    if (!reduce) {
-      const speed = flipping ? 1.15 : 2.4;
-      curl += (curlTo - curl) * Math.min(1, dt * (speed * 3));
-      if (flipping > 0 && curl > 0.995) commit(1);
-      if (flipping < 0 && curl < 0.01) {
-        curl = 0;
-        curlTo = 0;
-        flipping = 0;
-        curlGeo(rightGeo, 0);
-        markActive();
-      }
+    if (flipping && !reduce) {
+      turnT = Math.min(1, turnT + dt / TURN);
+      const e = ease(turnT);
+      const amount = flipping > 0 ? e : 1 - e;
+      curled = -1;
+      applyCurl(amount);
+      if (turnT >= 1) commit(flipping > 0 ? 1 : -1);
     }
-    curlGeo(rightGeo, reduce ? 0 : curl);
-    const slug = project(index).slug;
-    mockups.forEach((m) => {
-      const base = m.userData.baseY ?? (m.userData.baseY = m.position.y);
-      const target = base + (m.userData.lift || 0);
-      m.position.y += (target - m.position.y) * Math.min(1, dt * 4);
-      if (m.userData.slug === slug) ring.position.set(m.position.x, 0.021, m.position.z);
-    });
-    const s = slug ? 1 : 0.6;
-    const sc = mockups.find((m) => m.userData.slug === slug);
-    ring.scale.setScalar(sc ? 1.15 : 0.2);
+    if (reveal < 1) reveal = Math.min(1, reveal + dt * 2.4);
+    applyMocks();
   }
 
   return {
@@ -573,10 +675,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     resize,
     update,
     step,
-    pointerDown,
-    pointerMove,
-    pointerUp,
-    setCurl(v) { curl = curlTo = v; if (!flipping) curlGeo(rightGeo, v); },
-    nav: () => ({ index, total: projects.length, label: project(index).title }),
+    setCurl(v) {
+      if (flipping) return;
+      const t = Math.min(1, Math.max(0, Number(v) || 0));
+      curled = -1;
+      applyCurl(reduce ? 0 : t);
+      applyMocks();
+    },
+    nav: () => ({
+      index,
+      total: projects.length,
+      label: projects.length ? show(index).title : '',
+    }),
   };
 }
