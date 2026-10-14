@@ -1,0 +1,20 @@
+// Demo content — replace with real work. Shape: 'hello' | 'mark' | 'vessel'
+export const PROJECTS = [
+  { id:'hello', shape:0, label:'Hello', cls:'hello',
+    eyebrow:'Your Name — Ceramicist & Designer',
+    title:'Made by <em>hand</em>,<br>shaped by spin.',
+    desc:'Press and hold the pedal to throw the clay. Each turn of the wheel reshapes it into the next project.',
+    meta:null, images:[] },
+  { id:'ridge', shape:1, label:'Ridge Tea House', cls:'p1',
+    eyebrow:'01 — Graphic Design',
+    title:'Ridge <em>Tea</em> House',
+    desc:'A brand identity for a fictional mountain tea house. A single leaf held inside a ring, the cup seen from above, carries the mark from tins to signage. The palette borrows from pine, kiln brick and raw honey.',
+    meta:[['Year','2025'],['Role','Identity, Packaging'],['Tools','Illustrator, Letterpress'],['Client','Demo project']],
+    images:[['assets/img/p1-logo.svg','Primary mark','i1'],['assets/img/p1-pack.svg','Tin packaging','i2'],['assets/img/p1-palette.svg','Palette','i3']] },
+  { id:'still', shape:2, label:'Still Water', cls:'p2',
+    eyebrow:'02 — Ceramics',
+    title:'Still <em>Water</em> Vessels',
+    desc:'A collection of wheel-thrown stoneware bottles and bowls, fired to cone 10 in reduction. Thin walls, a narrow neck, and glazes tested across forty tiles to find a quiet celadon.',
+    meta:[['Year','2026'],['Material','Stoneware, cone 10'],['Pieces','14 vessels'],['Glazes','Celadon, Shino']],
+    images:[['assets/img/p2-vessels.svg','Bottle & bowl','i1'],['assets/img/p2-glaze.svg','Glaze tests','i2'],['assets/img/p2-detail.svg','Throwing lines','i3']] },
+];

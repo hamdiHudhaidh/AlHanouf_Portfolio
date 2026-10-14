@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your Name — Ceramicist &amp; Designer</title>
+<meta name="description" content="Portfolio of Your Name, ceramicist and designer. Press the pedal to throw the next project.">
+<meta name="theme-color" content="#e8e1d6">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{"imports":{"three":"./js/vendor/three.module.js","three/addons/":"./js/vendor/addons/"}}</script>
+</head>
+<body>
+<div id="loader" aria-hidden="true">
+  <div class="loader-wheel"><span></span></div>
+  <p class="loader-txt">Centering the clay</p>
+</div>
+
+<canvas id="scene" aria-label="A potter's wheel with clay"></canvas>
+<div id="splats" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="./" aria-label="Home">
+    <span class="brand-mark"></span>
+    <span class="brand-name">Studio Name</span>
+  </a>
+  <nav class="nav-links">
+    <button data-panel="about">About</button>
+    <button data-panel="contact">Contact</button>
+    <button id="soundBtn" aria-pressed="false" title="Sound">Sound <i>off</i></button>
+  </nav>
+</header>
+
+<main id="content" aria-live="polite"></main>
+
+<div class="hud">
+  <div class="counter"><span id="cIdx">00</span><span class="sep">/</span><span id="cTot">02</span></div>
+  <div class="hud-title" id="hudTitle">Hello</div>
+  <div class="steps">
+    <button id="prevBtn" aria-label="Previous project">&larr;</button>
+    <button id="nextBtn" aria-label="Next project">&rarr;</button>
+  </div>
+</div>
+
+<div class="pedal-wrap">
+  <button id="pedal" aria-label="Press and hold the pedal to spin the wheel and move to the next project">
+    <svg viewBox="0 0 220 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="pbody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3733"/><stop offset="1" stop-color="#1c1a18"/></linearGradient>
+        <linearGradient id="ptop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a554f"/><stop offset="1" stop-color="#2b2825"/></linearGradient>
+      </defs>
+      <rect x="18" y="78" width="184" height="30" rx="10" fill="url(#pbody)"/>
+      <g class="pedal-plate">
+        <path d="M30 76 L190 50 Q200 49 200 58 L200 70 Q200 76 192 77 L32 92 Q22 92 22 84 Q22 77 30 76Z" fill="url(#ptop)"/>
+        <g stroke="#6b655d" stroke-width="2" stroke-linecap="round" opacity=".6">
+          <path d="M60 79 L175 63"/><path d="M60 84 L175 68"/><path d="M60 74 L175 58"/>
+        </g>
+      </g>
+      <circle cx="40" cy="93" r="5" fill="#8a837a"/>
+    </svg>
+    <span class="pedal-label">Hold <kbd>Space</kbd> or press the pedal</span>
+  </button>
+  <div class="rpm"><span id="rpm">0</span> rpm</div>
+</div>
+
+<aside class="panel" id="panel-about" aria-hidden="true">
+  <button class="panel-close" aria-label="Close">Close</button>
+  <p class="eyebrow">About</p>
+  <h2>Clay, type &amp; the space between.</h2>
+  <p>Your Name is a ceramicist and graphic designer working between the wheel and the grid. The studio makes small-batch stoneware and brand identities for makers, cafés and cultural spaces.</p>
+  <p class="muted">This is a demo portfolio. All names, projects and images are placeholders.</p>
+  <dl class="facts"><div><dt>Based in</dt><dd>Your City</dd></div><div><dt>Practice</dt><dd>Ceramics · Identity · Packaging</dd></div><div><dt>Since</dt><dd>2019</dd></div></dl>
+</aside>
+<aside class="panel" id="panel-contact" aria-hidden="true">
+  <button class="panel-close" aria-label="Close">Close</button>
+  <p class="eyebrow">Contact</p>
+  <h2>Commissions open for spring.</h2>
+  <p><a href="mailto:hello@example.com">hello@example.com</a></p>
+  <p><a href="#" rel="noopener">Instagram</a> · <a href="#" rel="noopener">Are.na</a></p>
+</aside>
+
+<div id="cursor" aria-hidden="true"><span></span></div>
+<noscript><p class="noscript">This portfolio needs JavaScript to spin the wheel.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
