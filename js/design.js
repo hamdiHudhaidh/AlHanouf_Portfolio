@@ -273,7 +273,7 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   function aim(i, snap) {
     placeFocus(i);
-    const dist = narrow ? 2.55 : 3.35;
+    const dist = narrow ? 3.35 : 4.7;
     const yLift = narrow ? 0.22 : 0.08;
     const xShift = narrow ? 0 : -0.22;
     camTarget.set(focus.x + xShift, focus.y + yLift, focus.z + dist);
