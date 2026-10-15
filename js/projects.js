@@ -15,9 +15,8 @@ export const ARTIST = {
   portraitNote: 'Portrait placeholder — replace assets/img/portrait.svg',
   source: 'https://alhanoufalaswad.myportfolio.com',
   links: [
-    { label: 'Portfolio', href: 'https://alhanoufalaswad.myportfolio.com' },
     { label: 'LinkedIn', href: 'http://www.linkedin.com/in/alhanouf-a-b86a332a6' },
-    { label: 'Contact', href: 'https://alhanoufalaswad.myportfolio.com/contact' },
+    { label: 'WhatsApp', href: 'https://wa.me/966537411985' },
   ],
 };
 
@@ -174,6 +173,6 @@ export const DESIGN = [
 export const SCENES = [
   { id: 'about', hash: '#about', label: 'About' },
   { id: 'ceramics', hash: '#ceramics', label: 'Ceramics' },
-  { id: 'design', hash: '#design', label: 'Graphic Design' },
-  { id: 'exhibition', hash: '#exhibition', label: 'Exhibition' },
+  { id: 'design', hash: '#design', label: 'Design' },
+  { id: 'art', hash: '#art', label: 'Art' },
 ];
