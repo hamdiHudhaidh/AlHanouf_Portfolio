@@ -35,7 +35,7 @@ a{color:inherit}
 .about-links span{color:var(--ink2)}
 .reveal{-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:0 0;mask-size:0 0;transition:-webkit-mask-size 1.15s cubic-bezier(.2,.8,.2,1),mask-size 1.15s cubic-bezier(.2,.8,.2,1)}
 .reveal.in{-webkit-mask-size:700% 700%;mask-size:700% 700%}
-#designLabel{position:fixed;right:6vw;top:16vh;z-index:32;width:min(460px,34vw);max-height:66vh;overflow:auto;color:var(--ink);background:none;border:0;box-shadow:none;padding:0;opacity:0;transition:opacity .9s ease;pointer-events:none}
+#designLabel{position:fixed;right:6vw;top:16vh;z-index:32;width:min(460px,34vw);max-height:70vh;overflow:visible;color:var(--ink);background:none;border:0;box-shadow:none;padding:0 0 12px;opacity:0;transition:opacity .9s ease;pointer-events:none}
 #designLabel.in{opacity:1}
 #designLabel.in a{pointer-events:auto}
 #designLabel[hidden]{display:none}
@@ -45,7 +45,7 @@ a{color:inherit}
 #designLabel .facts a{text-decoration:none;border-bottom:1px solid var(--line)}
 #designLabel p{margin:0;font-size:16px;line-height:1.5;max-width:34ch}
 #designLabel .board-photos{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px 14px;margin-top:20px}
-#designLabel .board-photos img{width:auto;max-width:calc(50% - 8px);max-height:18vh;height:auto;display:block;object-fit:contain;background:#f7f1e8;box-shadow:0 14px 28px -18px rgba(40,24,12,.55)}
+#designLabel .board-photos img{width:auto;max-width:calc(33.33% - 12px);max-height:14vh;height:auto;display:block;object-fit:contain;background:#f7f1e8;box-shadow:0 14px 28px -18px rgba(40,24,12,.55)}
 #designLabel .board-photos img:nth-child(3n+1){transform:rotate(-3.5deg)}
 #designLabel .board-photos img:nth-child(3n+2){transform:rotate(2.2deg);margin-top:10px}
 #designLabel .board-photos img:nth-child(3n){transform:rotate(-1.2deg)}
@@ -103,9 +103,11 @@ a{color:inherit}
   .c-desc{left:18px;right:18px;top:auto;bottom:168px;width:auto;font-size:13px}
   .i2,.i3{display:none}
   .i1{right:16px;top:84px;width:84px}
-  #designLabel{left:16px;right:16px;top:auto;bottom:148px;width:auto;max-height:30vh}
+  #designLabel{left:16px;right:16px;top:auto;bottom:150px;width:auto;max-height:32vh;overflow:visible}
   #designLabel h2{font-size:28px}
-  #designLabel .board-photos img{max-height:12vh;max-width:calc(33% - 10px)}
+  #designLabel .board-photos{flex-wrap:nowrap;gap:8px}
+  #designLabel .board-photos img,
+  #designLabel .board-photos img:nth-child(n){max-height:10vh;max-width:18%;margin-top:0}
   .board-label{font-size:8px;letter-spacing:.12em}
   .hud{bottom:86px}
   .page-link{bottom:22px;font-size:18px}

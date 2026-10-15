@@ -64,7 +64,7 @@ function arrange(aspects, seed) {
       w = maxW * (0.86 + rnd() * 0.14);
       h = w / Math.max(0.2, ar);
     }
-    return { w, h, rot: (rnd() - 0.5) * 0.28 };
+    return { w, h, rot: (rnd() - 0.5) * 0.52 };
   });
 
   const maxRow = n > 4 ? 4.85 : 4.15;
@@ -78,7 +78,7 @@ function arrange(aspects, seed) {
       row = [];
       rowW = 0;
     }
-    const gap = row.length ? -(0.07 + rnd() * 0.12) : 0;
+    const gap = row.length ? -(0.14 + rnd() * 0.16) : 0;
     row.push({ ...it, gap });
     rowW += it.w + (row.length > 1 ? gap : 0);
   });
@@ -90,19 +90,19 @@ function arrange(aspects, seed) {
     const h = Math.max(...r.map((it) => it.h));
     let w = 0;
     r.forEach((it, idx) => { w += it.w + (idx ? it.gap : 0); });
-    let x = -w / 2 + (rnd() - 0.5) * 0.32;
-    const rowShift = (rnd() - 0.5) * 0.18;
+    let x = -w / 2 + (rnd() - 0.5) * 0.55;
+    const rowShift = (rnd() - 0.5) * 0.28;
     r.forEach((it) => {
       placed.push({
-        x: x + it.w / 2,
-        y: -(y + h / 2) + (rnd() - 0.5) * 0.22 + rowShift,
+        x: x + it.w / 2 + (rnd() - 0.5) * 0.16,
+        y: -(y + h / 2) + (rnd() - 0.5) * 0.36 + rowShift,
         w: it.w,
         h: it.h,
         rot: it.rot,
       });
       x += it.w + it.gap;
     });
-    y += h * (0.72 + rnd() * 0.12);
+    y += h * (0.58 + rnd() * 0.12);
   });
 
   if (!placed.length) return { placed, width: 1, height: 1 };
@@ -166,15 +166,15 @@ export async function createDesign(renderer, { reduce, projects }) {
   columns.forEach((col, side) => {
     let top = side === 1 ? -0.48 - rndCol() * 0.4 : rndCol() * 0.25;
     col.forEach((block) => {
-      const groupRot = (rndCol() - 0.5) * 0.11;
+      const groupRot = (rndCol() - 0.5) * 0.2;
       placedBlocks[block.index] = {
         ...block,
-        centerX: colX[side] + (rndCol() - 0.5) * 0.5,
-        centerY: top - block.height / 2,
+        centerX: colX[side] + (rndCol() - 0.5) * 0.9,
+        centerY: top - block.height / 2 + (rndCol() - 0.5) * 0.35,
         side: side === 0 ? 'left' : 'right',
         groupRot,
       };
-      top -= block.height - (0.04 + rndCol() * 0.24);
+      top -= block.height * (0.72 + rndCol() * 0.12);
     });
   });
   const ys = placedBlocks.map((block) => {

@@ -64,51 +64,51 @@ function wrapLines(g, text, x, y, maxW, lineH, maxLines) {
 function labelTexture(piece, renderer) {
   const canvas = document.createElement('canvas');
   canvas.width = 1280;
-  canvas.height = 760;
+  canvas.height = 800;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#f4efe6';
+  g.fillStyle = '#f7f1e8';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = 'rgba(29,27,25,0.28)';
-  g.lineWidth = 4;
-  g.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+  g.strokeStyle = 'rgba(29,27,25,0.45)';
+  g.lineWidth = 8;
+  g.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
 
-  let y = 92;
+  let y = 118;
   g.textBaseline = 'alphabetic';
   if (piece.artist) {
     g.fillStyle = '#5b554d';
-    g.font = '500 34px Inter, sans-serif';
+    g.font = '500 52px Inter, sans-serif';
     g.fillText(piece.artist, 72, y);
-    y += 28;
-    g.strokeStyle = 'rgba(29,27,25,0.18)';
-    g.lineWidth = 2;
+    y += 36;
+    g.strokeStyle = 'rgba(29,27,25,0.22)';
+    g.lineWidth = 3;
     g.beginPath();
     g.moveTo(72, y);
-    g.lineTo(420, y);
+    g.lineTo(520, y);
     g.stroke();
-    y += 78;
+    y += 130;
   } else {
-    y += 36;
+    y += 70;
   }
 
   const title = [piece.title, piece.year].filter(Boolean).join(', ');
   if (title) {
     g.fillStyle = '#1d1b19';
-    g.font = '500 78px Cormorant, serif';
-    wrapLines(g, title, 72, y, 1120, 86, 2);
-    y += title.length > 28 ? 180 : 96;
+    g.font = '500 148px Cormorant, serif';
+    wrapLines(g, title, 72, y, 1120, 156, 2);
+    y += title.length > 22 ? 320 : 170;
   }
 
   const facts = [piece.medium, piece.dimensions].filter(Boolean).join(' · ');
   if (facts) {
     g.fillStyle = '#5b554d';
-    g.font = '400 30px Inter, sans-serif';
+    g.font = '400 44px Inter, sans-serif';
     g.fillText(facts, 72, y);
-    y += 56;
+    y += 70;
   }
   if (piece.description) {
     g.fillStyle = '#1d1b19';
-    g.font = '400 36px Inter, sans-serif';
-    wrapLines(g, piece.description, 72, y, 1120, 50, 4);
+    g.font = '400 58px Inter, sans-serif';
+    wrapLines(g, piece.description, 72, y, 1120, 74, 4);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -226,8 +226,8 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({
         map: labelTexture(p, renderer),
-        transparent: true,
-        depthWrite: true,
+        toneMapped: false,
+        fog: false,
       }),
     );
     plaque.renderOrder = 2;
@@ -272,19 +272,22 @@ export async function createExhibition(renderer, { reduce, pieces }) {
 
   function labelBox(work) {
     const b = pieceBox(work);
-    const lw = narrow ? 1.32 : 1.05;
-    const lh = narrow ? 0.74 : 0.7;
     if (narrow) {
-      const y = work.kind === 'sculpture' ? 0.46 : b.minY - 0.14 - lh / 2;
-      const z = work.kind === 'sculpture' ? 1.52 : 0.1;
+      const lw = work.kind === 'sculpture' ? 1.5 : 1.7;
+      const lh = 1.02;
+      const top = work.kind === 'sculpture' ? 0.92 : b.minY - 0.08;
+      const y = Math.max(lh / 2 + 0.08, top - lh / 2);
+      const z = work.kind === 'sculpture' ? 1.62 : 0.14;
       return { x: work.x, y, w: lw, h: lh, z };
     }
+    const lw = 1.08;
+    const lh = 0.96;
     return {
-      x: b.maxX + 0.18 + lw / 2,
-      y: work.kind === 'sculpture' ? 1.08 : 1.82,
+      x: b.maxX + 0.22 + lw / 2,
+      y: work.kind === 'sculpture' ? 1.12 : 1.7,
       w: lw,
       h: lh,
-      z: work.kind === 'sculpture' ? 1.22 : 0.1,
+      z: work.kind === 'sculpture' ? 1.28 : 0.14,
     };
   }
 
