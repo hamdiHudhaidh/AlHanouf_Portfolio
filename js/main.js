@@ -14,6 +14,7 @@ const aboutEl = $('#about');
 const content = $('#content');
 const exhibitLabel = $('#exhibitLabel');
 const designLabel = $('#designLabel');
+const boardLabels = $('#boardLabels');
 const splats = $('#splats');
 const veil = $('#veil');
 const hud = $('#hud');
@@ -176,9 +177,14 @@ function showExhibit(piece) {
 }
 
 function showDesign(project) {
-  if (current !== 'design' || !project) {
+  if (current !== 'design') {
     designLabel.hidden = true;
     designLabel.innerHTML = '';
+    designLabel.classList.remove('in');
+    return;
+  }
+  if (!project) {
+    designLabel.classList.remove('in');
     return;
   }
   const bits = [];
@@ -186,8 +192,21 @@ function showDesign(project) {
   if (project.title) bits.push(`<h2>${esc(project.title)}</h2>`);
   if (project.text) bits.push(`<p>${esc(project.text)}</p>`);
   if (project.links?.length) bits.push(`<p class="facts">${project.links.map((l) => esc(l.label)).join('<br>')}</p>`);
+  const more = (project.images || []).slice(1);
+  if (more.length) {
+    bits.push(`<div class="board-photos">${more.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>`);
+  }
   designLabel.innerHTML = bits.join('');
+  const wasHidden = designLabel.hidden;
   designLabel.hidden = bits.length === 0;
+  if (designLabel.hidden) return;
+  if (reduce || (!wasHidden && designLabel.classList.contains('in'))) {
+    designLabel.classList.add('in');
+    return;
+  }
+  designLabel.classList.remove('in');
+  void designLabel.offsetWidth;
+  designLabel.classList.add('in');
 }
 
 function renderAbout() {
@@ -265,6 +284,7 @@ function applyChrome() {
   }
   showExhibit(current === 'exhibition' ? active?.nav()?.piece : null);
   showDesign(current === 'design' ? active?.nav()?.project : null);
+  boardLabels.hidden = current !== 'design';
   paintHud();
   paintNav(current);
 }

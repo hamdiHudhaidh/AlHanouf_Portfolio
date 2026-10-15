@@ -1,14 +1,8 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 
-const BAY_W = 1.48;
-const BAY_H = 1.68;
-const BAY_D = 0.52;
-const POST = 0.08;
-const COLS = 5;
-const ROWS = 2;
-
-const FLOOR = -BAY_H / 2 + 0.015;
+// Graphic Design is a print moodboard. The camera stays on the whole sheet.
+// Choosing a work scales and shifts that cluster, dims the rest, and the
+// panel beside it carries her words. 00 eases everything back.
 
 function loadImage(url) {
   return new Promise((resolve) => {
@@ -19,48 +13,125 @@ function loadImage(url) {
   });
 }
 
+function easeGlide(t, easeIn) {
+  if (!easeIn) return 1 - (1 - t) * (1 - t);
+  return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+}
+
+function printMaterial(map, uSat) {
+  const mat = new THREE.MeshBasicMaterial({ map, color: 0xffffff });
+  mat.customProgramCacheKey = () => 'moodboard-sat';
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uSat = uSat;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uSat;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+         {
+           float luma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+           diffuseColor.rgb = mix(vec3(luma), diffuseColor.rgb, uSat);
+           diffuseColor.rgb *= mix(0.56, 1.0, uSat);
+         }`,
+      );
+  };
+  return mat;
+}
+
+function blob(rx, ry) {
+  const shape = new THREE.Shape();
+  const n = 48;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const wobble = 1 + 0.07 * Math.sin(a * 3 + 0.6) + 0.035 * Math.sin(a * 5 + 1.4);
+    const x = Math.cos(a) * rx * wobble;
+    const y = Math.sin(a) * ry * wobble;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  return new THREE.ShapeGeometry(shape);
+}
+
+// Shelf-pack one project's photos into a loose block. Sizes follow the real
+// aspect ratios. The first image is a little larger than the rest.
+function arrange(aspects) {
+  const n = aspects.length;
+  const cellH = n > 5 ? 0.98 : n > 2 ? 1.2 : n > 1 ? 1.42 : 1.85;
+  const items = aspects.map((ar, i) => {
+    const emphasis = i === 0 ? 1.26 : 0.84 + (i % 3) * 0.07;
+    let h = cellH * emphasis;
+    let w = h * ar;
+    const maxW = n === 1 ? 3.15 : 2.28;
+    if (w > maxW) {
+      w = maxW;
+      h = w / ar;
+    }
+    return { w, h };
+  });
+  const maxRow = n > 4 ? 5.35 : 4.7;
+  const gap = 0.11;
+  const rows = [];
+  let row = [];
+  let rowW = 0;
+  items.forEach((it) => {
+    const next = rowW + (row.length ? gap : 0) + it.w;
+    if (row.length && next > maxRow) {
+      rows.push(row);
+      row = [];
+      rowW = 0;
+    }
+    row.push(it);
+    rowW += (row.length > 1 ? gap : 0) + it.w;
+  });
+  if (row.length) rows.push(row);
+
+  let y = 0;
+  const placed = [];
+  rows.forEach((r, ri) => {
+    const h = Math.max(...r.map((it) => it.h));
+    const w = r.reduce((s, it) => s + it.w, 0) + gap * (r.length - 1);
+    let x = -w / 2 + (ri % 2 === 0 ? -0.07 : 0.09);
+    r.forEach((it, ii) => {
+      const oy = ((ii % 2 === 0 ? 1 : -1) * Math.min(0.05, (h - it.h) * 0.35));
+      placed.push({ x: x + it.w / 2, y: -(y + it.h / 2) + oy, w: it.w, h: it.h });
+      x += it.w + gap;
+    });
+    y += h + gap + 0.02;
+  });
+  const height = Math.max(0.2, y - gap);
+  const shift = height / 2;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  placed.forEach((p) => {
+    p.y += shift;
+    minX = Math.min(minX, p.x - p.w / 2);
+    maxX = Math.max(maxX, p.x + p.w / 2);
+    minY = Math.min(minY, p.y - p.h / 2);
+    maxY = Math.max(maxY, p.y + p.h / 2);
+  });
+  return {
+    placed,
+    width: Math.max(0.2, maxX - minX),
+    height: Math.max(0.2, maxY - minY),
+  };
+}
+
 export async function createDesign(renderer, { reduce, projects }) {
   const scene = new THREE.Scene();
-  const BG = new THREE.Color('#e8e1d6');
-  scene.background = BG;
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.42;
+  scene.background = new THREE.Color('#e8e1d6');
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 280);
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.08, 40);
-  const key = new THREE.DirectionalLight(0xfff3e6, 2.7);
-  key.position.set(-2.4, 6.4, 7.2);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.bias = -0.00045;
-  key.shadow.normalBias = 0.028;
-  key.shadow.camera.near = 0.5;
-  key.shadow.camera.far = 28;
-  key.shadow.camera.left = key.shadow.camera.bottom = -6;
-  key.shadow.camera.right = key.shadow.camera.top = 6;
-  key.target.position.set(0, 1.6, 0);
-  scene.add(key, key.target);
-  scene.add(new THREE.DirectionalLight(0xd5deea, 0.55).translateX(4).translateY(3).translateZ(4));
-  scene.add(new THREE.HemisphereLight(0xfff8ee, 0xb7ab9c, 0.78));
-
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(24, 16),
-    new THREE.ShadowMaterial({ opacity: 0.2 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = 0.001;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  const images = new Map();
-  await Promise.all(projects.flatMap((p) => p.images.map(async (url) => {
-    if (!images.has(url)) images.set(url, await loadImage(url));
-  })));
+  const loaded = await Promise.all(projects.map(async (project) => {
+    const images = await Promise.all(project.images.map((url) => loadImage(url)));
+    return images
+      .map((img, imageIndex) => (img ? { img, imageIndex, ar: img.naturalWidth / img.naturalHeight } : null))
+      .filter(Boolean);
+  }));
 
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
-  function texOf(url) {
-    const img = images.get(url);
-    if (!img) return null;
+  function textureOf(img) {
     const t = new THREE.Texture(img);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = maxAniso;
@@ -70,287 +141,344 @@ export async function createDesign(renderer, { reduce, projects }) {
     t.needsUpdate = true;
     return t;
   }
-  function paperMat(map) {
-    return new THREE.MeshStandardMaterial({
-      map: map || null,
-      color: map ? 0xffffff : 0xe7e0d6,
-      roughness: 0.58,
-      metalness: 0,
+
+  const blocks = loaded.map((images, i) => ({ ...arrange(images.map((image) => image.ar)), index: i }));
+  const gapB = 0.36;
+  const colGap = 0.48;
+  const columns = [[], []];
+  blocks.forEach((block, i) => columns[i % 2].push(block));
+  const colW = columns.map((col) => Math.max(1, ...col.map((block) => block.width), 1));
+  const totalW = colW[0] + colGap + colW[1];
+  const colX = [-totalW / 2 + colW[0] / 2, totalW / 2 - colW[1] / 2];
+  const placedBlocks = [];
+  columns.forEach((col, side) => {
+    let top = side === 1 ? -0.42 : 0;
+    col.forEach((block) => {
+      placedBlocks[block.index] = {
+        ...block,
+        centerX: colX[side],
+        centerY: top - block.height / 2,
+        side: side === 0 ? 'left' : 'right',
+      };
+      top -= block.height + gapB;
+    });
+  });
+  const ys = placedBlocks.map((block) => [block.centerY - block.height / 2, block.centerY + block.height / 2]).flat();
+  const yShift = ys.length ? -((Math.min(...ys) + Math.max(...ys)) / 2) : 0;
+  placedBlocks.forEach((block) => { block.centerY += yShift; });
+
+  let clusterMinX = Infinity;
+  let clusterMaxX = -Infinity;
+  let clusterMinY = Infinity;
+  let clusterMaxY = -Infinity;
+  placedBlocks.forEach((block) => {
+    clusterMinX = Math.min(clusterMinX, block.centerX - block.width / 2);
+    clusterMaxX = Math.max(clusterMaxX, block.centerX + block.width / 2);
+    clusterMinY = Math.min(clusterMinY, block.centerY - block.height / 2);
+    clusterMaxY = Math.max(clusterMaxY, block.centerY + block.height / 2);
+  });
+  if (!placedBlocks.length) {
+    clusterMinX = -1;
+    clusterMaxX = 1;
+    clusterMinY = -1;
+    clusterMaxY = 1;
+  }
+
+  const labelRoot = document.getElementById('boardLabels');
+  labelRoot.innerHTML = '';
+
+  const entries = [];
+  const swatches = [];
+  const grey = new THREE.Color('#7d7872');
+
+  placedBlocks.forEach((block, i) => {
+    const group = new THREE.Group();
+    group.position.set(block.centerX, block.centerY, 0);
+    scene.add(group);
+    const uSats = [];
+    const images = loaded[i];
+    let hero = null;
+    images.forEach((image, ii) => {
+      const spot = block.placed[ii];
+      const uSat = { value: 1 };
+      uSats.push(uSat);
+      const mat = printMaterial(textureOf(image.img), uSat);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spot.w, spot.h), mat);
+      mesh.position.set(spot.x, spot.y, 0.05 + ii * 0.004);
+      mesh.rotation.z = ((i * 3 + ii * 5) % 5 - 2) * 0.007;
+      group.add(mesh);
+      const shade = new THREE.Mesh(
+        new THREE.PlaneGeometry(spot.w, spot.h),
+        new THREE.MeshBasicMaterial({ color: 0x2a2622, transparent: true, opacity: 0.07, depthWrite: false }),
+      );
+      shade.position.set(spot.x + 0.035, spot.y - 0.04, 0.03);
+      group.add(shade);
+      if (ii === 0) hero = mesh;
+    });
+
+    const outward = block.side === 'right' ? 1 : -1;
+    const anchor = new THREE.Vector3(
+      block.centerX + outward * (block.width / 2 + 0.42),
+      block.centerY + (i % 2 === 0 ? 0.18 : -0.14),
+      0,
+    );
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0x1d1b19, transparent: true, opacity: 0.8 });
+    const endMat = new THREE.MeshBasicMaterial({ color: 0x1d1b19, transparent: true, opacity: 0.8 });
+    let dotMesh = null;
+    if (hero) {
+      const spot = block.placed[0];
+      dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.042, 18), dotMat);
+      dotMesh.position.set(outward * (spot.w / 2 + 0.01), 0, 0.03);
+      hero.add(dotMesh);
+    }
+    const endDot = new THREE.Mesh(new THREE.CircleGeometry(0.026, 14), endMat);
+    endDot.position.set(anchor.x, anchor.y, 0.1);
+    scene.add(endDot);
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x1d1b19, transparent: true, opacity: 0.7 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.frustumCulled = false;
+    scene.add(line);
+
+    const label = document.createElement('div');
+    label.className = `board-label ${block.side}`;
+    label.textContent = projects[i].title || '';
+    labelRoot.appendChild(label);
+
+    entries.push({
+      group,
+      center: new THREE.Vector3(block.centerX, block.centerY, 0),
+      w: block.width,
+      h: block.height,
+      uSats,
+      dotMesh,
+      dotMat,
+      endMat,
+      endDot,
+      line,
+      anchor,
+      label,
+      side: block.side,
+    });
+  });
+
+  ['left', 'right'].forEach((side) => {
+    const col = entries.filter((entry) => entry.side === side).sort((a, b) => b.anchor.y - a.anchor.y);
+    for (let i = 1; i < col.length; i++) {
+      const limit = col[i - 1].anchor.y - 0.46;
+      if (col[i].anchor.y > limit) col[i].anchor.y = limit;
+    }
+  });
+  entries.forEach((entry) => {
+    entry.endDot.position.y = entry.anchor.y;
+  });
+
+  const swatchSpots = [
+    { fx: -0.02, fy: 1.01, rx: 0.5, ry: 0.3, rot: 0.45, color: '#a8603f' },
+    { fx: 1.03, fy: 0.94, rx: 0.36, ry: 0.5, rot: -0.35, color: '#2c2824' },
+    { fx: -0.04, fy: 0.62, rx: 0.28, ry: 0.4, rot: 0.2, color: '#8c4a2f' },
+    { fx: 1.05, fy: 0.46, rx: 0.48, ry: 0.26, rot: 0.18, color: '#b7ab9c' },
+    { fx: 0.02, fy: 0.16, rx: 0.34, ry: 0.22, rot: -0.55, color: '#5b554d' },
+    { fx: 0.98, fy: 0.08, rx: 0.42, ry: 0.28, rot: 0.4, color: '#6e3b2a' },
+    { fx: 0.58, fy: 1.05, rx: 0.32, ry: 0.18, rot: -0.25, color: '#c4a090' },
+    { fx: 0.34, fy: -0.03, rx: 0.24, ry: 0.16, rot: 0.7, color: '#1d1b19' },
+  ];
+  const spanW = clusterMaxX - clusterMinX;
+  const spanH = clusterMaxY - clusterMinY;
+  swatchSpots.forEach((spot) => {
+    const mesh = new THREE.Mesh(
+      blob(spot.rx, spot.ry),
+      new THREE.MeshBasicMaterial({ color: spot.color }),
+    );
+    mesh.position.set(
+      clusterMinX + spot.fx * spanW,
+      clusterMinY + spot.fy * spanH,
+      0.02,
+    );
+    mesh.rotation.z = spot.rot;
+    mesh.userData.base = new THREE.Color(spot.color);
+    scene.add(mesh);
+    swatches.push(mesh);
+  });
+
+  const padL = 3.15;
+  const padR = 6.4;
+  const padY = 1.15;
+  const paperW = spanW + padL + padR;
+  const paperH = spanH + padY * 2;
+  const paperCx = (clusterMinX - padL + clusterMaxX + padR) / 2;
+  const paperCy = (clusterMinY + clusterMaxY) / 2;
+  const paper = new THREE.Mesh(
+    new THREE.PlaneGeometry(paperW, paperH),
+    new THREE.MeshBasicMaterial({ color: 0xf7f1e8 }),
+  );
+  paper.position.set(paperCx, paperCy, 0);
+  scene.add(paper);
+  const under = new THREE.Mesh(
+    new THREE.PlaneGeometry(paperW, paperH),
+    new THREE.MeshBasicMaterial({ color: 0x2a2622, transparent: true, opacity: 0.05, depthWrite: false }),
+  );
+  under.position.set(paperCx + 0.08, paperCy - 0.1, -0.02);
+  scene.add(under);
+
+  const labelXs = entries.map((entry) => entry.anchor.x);
+  const overview = {
+    minX: Math.min(clusterMinX, ...labelXs, clusterMinX) - 2.15,
+    maxX: Math.max(clusterMaxX, ...labelXs, clusterMaxX) + 2.15,
+    minY: clusterMinY - 0.55,
+    maxY: clusterMaxY + 0.55,
+  };
+
+  let slot = 0;
+  let narrow = false;
+  let viewW = 1440;
+  let viewH = 900;
+  const satFrom = entries.map(() => 1);
+  const satTo = entries.map(() => 1);
+  const satNow = entries.map(() => 1);
+  const scaleFrom = entries.map(() => 1);
+  const scaleTo = entries.map(() => 1);
+  const scaleNow = entries.map(() => 1);
+  const posFrom = entries.map((entry) => entry.center.clone());
+  const posTo = entries.map((entry) => entry.center.clone());
+  const posNow = entries.map((entry) => entry.center.clone());
+  let swatchFrom = 1;
+  let swatchTo = 1;
+  let swatchNow = 1;
+  let animStart = 0;
+  let animMs = 1000;
+  let animating = false;
+  let easeIn = true;
+  const tmp = new THREE.Vector3();
+  const FOCUS_SCALE = 1.12;
+
+  function fitBoard() {
+    const fov = narrow ? 40 : 30;
+    camera.fov = fov;
+    camera.aspect = Math.max(0.35, viewW / Math.max(1, viewH));
+    camera.updateProjectionMatrix();
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const spanX = overview.maxX - overview.minX;
+    const spanY = overview.maxY - overview.minY;
+    const dist = Math.max(spanY / (2 * tanV * 0.9), spanX / (2 * tanV * camera.aspect * 0.9), 2);
+    const cx = (overview.minX + overview.maxX) / 2;
+    const cy = (overview.minY + overview.maxY) / 2;
+    camera.position.set(cx, cy, dist);
+    camera.lookAt(cx, cy, 0);
+  }
+
+  function boardVisible() {
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const visH = 2 * camera.position.z * tanV;
+    return { visW: visH * camera.aspect, visH };
+  }
+
+  function placeTarget(i, focus) {
+    const entry = entries[i];
+    posTo[i].copy(entry.center);
+    if (i !== focus) return;
+    const { visW, visH } = boardVisible();
+    if (narrow) {
+      const maxY = overview.maxY - (entry.h * FOCUS_SCALE) / 2 - 0.12;
+      posTo[i].y = Math.min(entry.center.y + visH * 0.07, maxY);
+    } else {
+      const minX = overview.minX + (entry.w * FOCUS_SCALE) / 2 + 0.15;
+      posTo[i].x = Math.max(entry.center.x - visW * 0.085, minX);
+    }
+  }
+
+  function applyVisual() {
+    entries.forEach((entry, i) => {
+      const sat = satNow[i];
+      const sc = scaleNow[i];
+      entry.uSats.forEach((u) => { u.value = sat; });
+      entry.group.scale.setScalar(sc);
+      entry.group.position.set(posNow[i].x, posNow[i].y, (sc - 1) * 0.7);
+      entry.group.updateMatrixWorld(true);
+      const fade = 0.14 + 0.66 * sat;
+      entry.line.material.opacity = fade;
+      entry.dotMat.opacity = fade;
+      entry.endMat.opacity = fade;
+      if (entry.dotMesh) entry.dotMesh.getWorldPosition(tmp);
+      else tmp.set(entry.center.x, entry.center.y, 0.08);
+      const attr = entry.line.geometry.attributes.position;
+      attr.setXYZ(0, tmp.x, tmp.y, 0.1);
+      attr.setXYZ(1, entry.anchor.x, entry.anchor.y, 0.1);
+      attr.needsUpdate = true;
+      entry.line.geometry.computeBoundingSphere();
+      const p = entry.anchor.clone().project(camera);
+      const x = (p.x * 0.5 + 0.5) * viewW;
+      const y = (-p.y * 0.5 + 0.5) * viewH;
+      const shift = entry.side === 'right' ? '0, -50%' : '-100%, -50%';
+      entry.label.style.transform = `translate(${x}px, ${y}px) translate(${shift})`;
+      const onScreen = p.z < 1 && x > -220 && x < viewW + 40 && y > -30 && y < viewH + 30;
+      entry.label.style.opacity = onScreen ? String(0.18 + 0.82 * sat) : '0';
+    });
+    swatches.forEach((mesh) => {
+      mesh.material.color.copy(mesh.userData.base).lerp(grey, 1 - swatchNow);
     });
   }
-  function darkMat() {
-    return new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.4, metalness: 0.34 });
-  }
-  function tag(mesh) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-  function board(map, w, h, d = 0.014) {
-    return tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), paperMat(map)));
-  }
 
-  const totalW = COLS * BAY_W + (COLS + 1) * POST;
-  const totalH = ROWS * BAY_H + (ROWS + 1) * POST;
-  const unit = new THREE.Group();
-  unit.position.y = totalH / 2 + 0.1;
-  scene.add(unit);
-
-  const caseMat = new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.76 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x3c352f, roughness: 0.68 });
-  const backMat = new THREE.MeshStandardMaterial({ color: 0xddd4c8, roughness: 0.94 });
-
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(totalW - POST * 0.4, totalH - POST * 0.4), backMat);
-  back.position.set(0, 0, -BAY_D / 2 + 0.01);
-  back.receiveShadow = true;
-  unit.add(back);
-
-  for (let c = 0; c <= COLS; c++) {
-    const x = -totalW / 2 + POST / 2 + c * (BAY_W + POST);
-    const post = new THREE.Mesh(new THREE.BoxGeometry(POST, totalH, BAY_D + 0.05), caseMat);
-    post.position.set(x, 0, 0.01);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    unit.add(post);
-  }
-  for (let r = 0; r <= ROWS; r++) {
-    const y = totalH / 2 - POST / 2 - r * (BAY_H + POST);
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(totalW, POST, BAY_D + 0.08), shelfMat);
-    shelf.position.set(0, y, 0.02);
-    shelf.castShadow = true;
-    shelf.receiveShadow = true;
-    unit.add(shelf);
-  }
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(totalW + 0.1, 0.1, BAY_D + 0.18), caseMat);
-  plinth.position.set(0, -totalH / 2 - 0.05, 0.03);
-  plinth.castShadow = true;
-  plinth.receiveShadow = true;
-  unit.add(plinth);
-
-  function slot(i) {
-    const col = i % COLS;
-    const row = Math.floor(i / COLS);
-    const x = -totalW / 2 + POST + BAY_W / 2 + col * (BAY_W + POST);
-    const y = totalH / 2 - POST - BAY_H / 2 - row * (BAY_H + POST);
-    return new THREE.Vector3(x, y, 0);
-  }
-
-  function lean(mesh, x, z, yaw = 0, tilt = -0.12) {
-    const h = mesh.geometry.parameters?.height || 0.4;
-    mesh.position.set(x, FLOOR + h * 0.5 * Math.cos(Math.abs(tilt)), z);
-    mesh.rotation.x = tilt;
-    mesh.rotation.y = yaw;
-    return mesh;
-  }
-
-  function buildBay(project) {
-    const g = new THREE.Group();
-    const urls = project.images;
-    const at = (i) => texOf(urls[Math.min(i, urls.length - 1)]);
-    const slug = project.slug;
-
-    if (slug === 'peak-identity') {
-      g.add(lean(board(at(1), 0.72, 1.18), 0.22, 0.02, -0.06, -0.16));
-      g.add(lean(board(at(0), 0.42, 0.56), -0.38, 0.08, 0.12, -0.08));
-      g.add(lean(board(at(2), 0.36, 0.48), -0.34, 0.16, 0.18, -0.04));
-    } else if (slug === 'parkit-idintity') {
-      g.add(lean(board(at(0), 1.16, 0.66), 0.02, 0.04, 0.04, -0.1));
-      g.add(lean(board(at(urls.length - 1), 0.34, 0.46), -0.48, 0.12, 0.2, -0.06));
-    } else if (slug === 'brand-idintity') {
-      g.add(lean(board(at(0), 0.46, 1.32), 0.02, 0.0, 0.04, -0.08));
-    } else if (slug === 'profile-design') {
-      const cover = board(at(0), 0.78, 1.05, 0.07);
-      const band = tag(new THREE.Mesh(
-        new THREE.BoxGeometry(0.028, 1.05, 0.074),
-        new THREE.MeshStandardMaterial({ color: 0x8c4a2f, roughness: 0.46 }),
-      ));
-      band.position.x = -0.39;
-      const book = new THREE.Group();
-      book.add(cover, band);
-      book.position.set(0.02, FLOOR + 0.54, 0.04);
-      book.rotation.y = -0.12;
-      g.add(book);
-    } else if (slug === 'video-editing') {
-      const bezel = tag(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.62, 0.04), darkMat()));
-      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.5), paperMat(at(0))));
-      screen.position.z = 0.024;
-      const monitor = new THREE.Group();
-      monitor.add(bezel, screen);
-      monitor.position.set(0.02, FLOOR + 0.42, 0.02);
-      monitor.rotation.x = -0.12;
-      const foot = tag(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.03, 0.16), darkMat()));
-      foot.position.set(0.02, FLOOR + 0.02, 0.08);
-      g.add(monitor, foot);
-    } else if (slug === 'cube-design') {
-      const cube = tag(new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), paperMat(at(1))));
-      cube.position.set(0.12, FLOOR + 0.34, 0.06);
-      cube.rotation.y = 0.62;
-      g.add(cube);
-      g.add(lean(board(at(0), 0.36, 0.48), -0.4, -0.02, 0.15, -0.1));
-      g.add(lean(board(at(2), 0.32, 0.42), -0.36, 0.1, 0.22, -0.05));
-    } else if (slug === 'playing-card-design') {
-      urls.slice(0, 3).forEach((url, i) => {
-        const card = board(texOf(url), 0.42, 0.64, 0.01);
-        card.position.set(-0.12 + i * 0.2, FLOOR + 0.34, 0.04 + i * 0.03);
-        card.rotation.y = -0.35 + i * 0.28;
-        card.rotation.z = -0.06 + i * 0.05;
-        g.add(card);
-      });
-    } else if (slug === 'social-media-posts') {
-      const body = tag(new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.74, 0.035), darkMat()));
-      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.6), paperMat(at(1))));
-      screen.position.z = 0.02;
-      const phone = new THREE.Group();
-      phone.add(body, screen);
-      phone.position.set(0.16, FLOOR + 0.4, 0.06);
-      phone.rotation.y = -0.2;
-      phone.rotation.x = -0.08;
-      g.add(phone);
-      g.add(lean(board(at(0), 0.4, 0.4), -0.36, 0.02, 0.12, -0.08));
-      g.add(lean(board(at(2), 0.34, 0.34), -0.32, 0.12, 0.2, -0.04));
-    } else if (slug === 'website-design') {
-      const base = tag(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.68), darkMat()));
-      base.position.set(0.02, FLOOR + 0.02, 0.08);
-      const lid = tag(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.58, 0.02), darkMat()));
-      const screen = tag(new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.48), paperMat(at(0))));
-      lid.geometry.translate(0, 0.29, 0);
-      screen.geometry.translate(0, 0.29, 0);
-      lid.position.set(0.02, FLOOR + 0.04, -0.2);
-      screen.position.set(0.02, FLOOR + 0.04, -0.185);
-      lid.rotation.x = -1.12;
-      screen.rotation.x = -1.12;
-      g.add(base, lid, screen);
-    } else if (slug === 'vest-design') {
-      g.add(lean(board(at(0), 0.62, 0.82), -0.12, 0.02, -0.08, -0.1));
-      g.add(lean(board(at(1), 0.56, 0.74), 0.28, 0.1, 0.14, -0.06));
-      g.add(lean(board(at(2), 0.34, 0.44), 0.46, 0.16, 0.2, -0.04));
-    } else {
-      g.add(lean(board(at(0), 0.7, 0.9), 0, 0.04, 0, -0.1));
-    }
-    return g;
-  }
-
-  const bays = [];
-  projects.forEach((project, i) => {
-    const bay = buildBay(project);
-    bay.position.copy(slot(i));
-    unit.add(bay);
-    bays.push(bay);
-  });
-
-  const nicheMat = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.96, emissive: 0x2a211c, emissiveIntensity: 0.18 });
-  const niche = new THREE.Mesh(new THREE.PlaneGeometry(BAY_W - 0.08, BAY_H - 0.08), nicheMat);
-  niche.position.z = -BAY_D / 2 + 0.02;
-  unit.add(niche);
-
-  const clay = new THREE.MeshStandardMaterial({ color: 0xa8603f, roughness: 0.42 });
-  const frame = new THREE.Group();
-  const fw = BAY_W - 0.1;
-  const fh = BAY_H - 0.1;
-  const t = 0.016;
-  [[fw, t, 0, fh / 2], [fw, t, 0, -fh / 2], [t, fh, -fw / 2, 0], [t, fh, fw / 2, 0]].forEach(([w, h, x, y]) => {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.02), clay);
-    bar.position.set(x, y, BAY_D / 2 - 0.02);
-    frame.add(bar);
-  });
-  unit.add(frame);
-
-  let index = 0;
-  let narrow = false;
-  const camTarget = new THREE.Vector3();
-  const focus = new THREE.Vector3();
-  const posFrom = new THREE.Vector3();
-  const posTo = new THREE.Vector3();
-  const lookFrom = new THREE.Vector3();
-  const lookTo = new THREE.Vector3();
-  const lookNow = new THREE.Vector3();
-  const markFrom = new THREE.Vector2();
-  const markTo = new THREE.Vector2();
-  let glideStart = 0;
-  let glideMs = 1;
-  let gliding = false;
-  let glideEaseIn = true;
-
-  function easeGlide(t, easeIn) {
-    if (!easeIn) return 1 - (1 - t) * (1 - t);
-    return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
-  }
-
-  function placeMark(x, y) {
-    frame.position.x = niche.position.x = x;
-    frame.position.y = niche.position.y = y;
-  }
-
-  function placeFocus(i) {
-    const n = projects.length ? (i + projects.length) % projects.length : 0;
-    const local = projects.length ? slot(n) : new THREE.Vector3();
-    focus.copy(local).add(unit.position);
-    markTo.set(local.x, local.y);
-  }
-
-  function aim(i, snap) {
-    placeFocus(i);
-    const dist = narrow ? 3.35 : 4.7;
-    const yLift = narrow ? 0.22 : 0.08;
-    const xShift = narrow ? 0 : -0.22;
-    camTarget.set(focus.x + xShift, focus.y + yLift, focus.z + dist);
-    lookTo.set(focus.x + (narrow ? 0 : -0.05), focus.y - (narrow ? 0.28 : 0.02), focus.z);
-    posTo.copy(camTarget);
+  function aim(next, snap) {
+    slot = next;
+    const focus = slot === 0 ? -1 : slot - 1;
+    entries.forEach((_, i) => {
+      satTo[i] = focus === -1 || i === focus ? 1 : 0;
+      scaleTo[i] = i === focus ? FOCUS_SCALE : 1;
+      placeTarget(i, focus);
+    });
+    swatchTo = focus === -1 ? 1 : 0;
     if (snap || reduce) {
-      gliding = false;
-      camera.position.copy(posTo);
-      lookNow.copy(lookTo);
-      camera.lookAt(lookNow);
-      placeMark(markTo.x, markTo.y);
+      satTo.forEach((v, i) => { satNow[i] = satFrom[i] = v; });
+      scaleTo.forEach((v, i) => { scaleNow[i] = scaleFrom[i] = v; });
+      posTo.forEach((v, i) => { posNow[i].copy(v); posFrom[i].copy(v); });
+      swatchNow = swatchFrom = swatchTo;
+      animating = false;
+      applyVisual();
       return;
     }
-    posFrom.copy(camera.position);
-    lookFrom.copy(lookNow);
-    markFrom.set(frame.position.x, frame.position.y);
-    const distM = Math.max(posFrom.distanceTo(posTo), lookFrom.distanceTo(lookTo));
-    glideMs = Math.min(1600, Math.max(920, 700 + distM * 240));
-    glideEaseIn = !gliding;
-    glideStart = performance.now();
-    gliding = distM > 0.015;
-    if (!gliding) {
-      camera.position.copy(posTo);
-      lookNow.copy(lookTo);
-      camera.lookAt(lookNow);
-      placeMark(markTo.x, markTo.y);
-    }
+    satNow.forEach((v, i) => { satFrom[i] = v; });
+    scaleNow.forEach((v, i) => { scaleFrom[i] = v; });
+    posNow.forEach((v, i) => { posFrom[i].copy(v); });
+    swatchFrom = swatchNow;
+    easeIn = !animating;
+    animStart = performance.now();
+    animMs = 1000;
+    animating = true;
   }
 
   function resize(w, h) {
+    viewW = w;
+    viewH = h;
     narrow = w / h < 0.9;
-    camera.aspect = w / h;
-    camera.fov = narrow ? 40 : 30;
-    camera.updateProjectionMatrix();
-    aim(index, true);
+    fitBoard();
+    aim(slot, true);
   }
 
   function update(dt, now) {
-    if (gliding && !reduce) {
-      const t = Math.min(1, ((now || performance.now()) - glideStart) / glideMs);
-      const e = easeGlide(t, glideEaseIn);
-      camera.position.lerpVectors(posFrom, posTo, e);
-      lookNow.lerpVectors(lookFrom, lookTo, e);
-      placeMark(
-        markFrom.x + (markTo.x - markFrom.x) * e,
-        markFrom.y + (markTo.y - markFrom.y) * e,
-      );
-      if (t >= 1) gliding = false;
+    if (animating && !reduce) {
+      const t = Math.min(1, ((now || performance.now()) - animStart) / animMs);
+      const e = easeGlide(t, easeIn);
+      satFrom.forEach((v, i) => { satNow[i] = v + (satTo[i] - v) * e; });
+      scaleFrom.forEach((v, i) => { scaleNow[i] = v + (scaleTo[i] - v) * e; });
+      posFrom.forEach((v, i) => posNow[i].lerpVectors(v, posTo[i], e));
+      swatchNow = swatchFrom + (swatchTo - swatchFrom) * e;
+      if (t >= 1) animating = false;
     }
-    camera.lookAt(lookNow);
+    applyVisual();
   }
 
   function step(dir) {
-    if (projects.length < 2) return false;
-    index = (index + dir + projects.length) % projects.length;
-    aim(index, reduce);
+    const n = projects.length + 1;
+    if (projects.length < 1) return false;
+    aim((slot + dir + n) % n, reduce);
     return true;
   }
 
-  if (projects.length) aim(0, true);
+  fitBoard();
+  aim(0, true);
 
   return {
     scene,
@@ -358,11 +486,14 @@ export async function createDesign(renderer, { reduce, projects }) {
     resize,
     update,
     step,
-    nav: () => ({
-      index,
-      total: projects.length,
-      label: projects[index]?.title || '',
-      project: projects[index] || null,
-    }),
+    nav: () => {
+      const project = slot === 0 ? null : projects[slot - 1] || null;
+      return {
+        index: slot - 1,
+        total: projects.length,
+        label: project?.title || '',
+        project,
+      };
+    },
   };
 }
