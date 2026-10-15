@@ -122,7 +122,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e6dfd4');
   scene.background = BG;
-  scene.fog = new THREE.Fog(BG, 16, 42);
+  scene.fog = new THREE.Fog(BG, 24, 48);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
   scene.environmentIntensity = 0.35;
@@ -299,7 +299,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     });
   }
 
-  function fitPose(minX, maxX, minY, maxY, lookZ) {
+  function fitPose(minX, maxX, minY, maxY, lookZ, fill = 0.9, zoom = 1.08) {
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     const spanX = Math.max(0.5, maxX - minX);
@@ -307,11 +307,19 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const tanV = Math.tan((camera.fov * Math.PI) / 360);
     const aspect = Math.max(0.35, camera.aspect);
     const dist = Math.max(
-      spanY / (2 * tanV * 0.9),
-      spanX / (2 * tanV * aspect * 0.9),
-    ) * 1.08;
+      spanY / (2 * tanV * fill),
+      spanX / (2 * tanV * aspect * fill),
+    ) * zoom;
     camTarget.set(cx, cy, lookZ + dist);
     lookTarget.set(cx, cy, lookZ);
+  }
+
+  // The gallery is clear at whatever distance the shot needs. A fixed fog
+  // distance erased the whole wall once the tall overview stepped back.
+  function updateFog() {
+    const reach = Math.max(6, camera.position.length());
+    scene.fog.near = reach + 6;
+    scene.fog.far = reach + 28;
   }
 
   function overviewPose() {
@@ -331,6 +339,12 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       minY = Math.min(minY, b.minY, l.y - l.h / 2, 0);
       maxY = Math.max(maxY, b.maxY + 0.36, l.y + l.h / 2);
     });
+    if (narrow) {
+      // Portrait screens are short on width. Fit the row across that width
+      // with only a slim margin, so the works stay large enough to read.
+      fitPose(minX - 0.22, maxX + 0.22, Math.min(minY, 0.05) - 0.12, maxY + 0.12, 0, 0.96, 1);
+      return;
+    }
     fitPose(minX - 0.45, maxX + 0.45, minY - 0.25, maxY, 0);
   }
 
@@ -356,6 +370,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       camera.position.copy(posTo);
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
+      updateFog();
       return;
     }
     posFrom.copy(camera.position);
@@ -370,6 +385,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
     }
+    updateFog();
   }
 
   function resize(w, h) {
@@ -390,6 +406,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       if (t >= 1) gliding = false;
     }
     camera.lookAt(lookNow);
+    updateFog();
   }
 
   function step(dir) {

@@ -374,6 +374,7 @@ document.fonts?.ready?.then(() => settleFit()).catch(() => {});
 const cursor = $('#cursor');
 let cx = innerWidth / 2, cy = innerHeight / 2, tx = cx, ty = cy;
 addEventListener('pointermove', (e) => {
+  cursor.classList.remove('off');
   tx = e.clientX;
   ty = e.clientY;
   cursor.classList.toggle('big', !!e.target.closest('button, a, .c-img'));

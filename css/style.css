@@ -79,8 +79,9 @@ a{color:inherit}
 .i3{right:6vw;top:58vh;width:min(12vw,170px);aspect-ratio:1}
 #cursor{position:fixed;left:0;top:0;z-index:60;pointer-events:none;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#c98a66,#7a3f27 72%);box-shadow:0 6px 10px rgba(40,20,10,.3);transition:width .3s,height .3s,margin .3s;display:none}
 @media (hover:hover) and (pointer:fine){#cursor{display:block}}
+#cursor.off{display:none}
 #cursor.big{width:44px;height:44px;margin:-22px 0 0 -22px;opacity:.85}
-#loader{position:fixed;inset:0;background:var(--bone);z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;transition:opacity .8s ease,visibility .8s}
+#loader{position:fixed;inset:0;background:var(--bone);z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;transition:opacity .8s ease}
 #loader.done{opacity:0;visibility:hidden;pointer-events:none}
 .loader-wheel{width:64px;height:64px;border-radius:50%;background:conic-gradient(from 0deg,#b9b3aa,#e9e4dc,#9e978d,#d9d3ca,#b9b3aa);animation:spin 1s linear infinite;display:grid;place-items:center}
 .loader-wheel span{width:30px;height:30px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 40% 30%,#c98a66,#8c4a2f 75%)}
