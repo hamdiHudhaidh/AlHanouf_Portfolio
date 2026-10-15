@@ -13,21 +13,61 @@ const canvas = $('#scene');
 const aboutEl = $('#about');
 const content = $('#content');
 const exhibitLabel = $('#exhibitLabel');
+const designLabel = $('#designLabel');
 const splats = $('#splats');
 const veil = $('#veil');
 const hud = $('#hud');
 const sceneNav = $('#sceneNav');
 
 let renderer = null;
+
+// A canvas with no width/height is 300×150. Drawing into that and stretching
+// it across the window is what made the whole site look pixelated. The old
+// code only corrected it inside the window resize handler, so a fresh load
+// stayed soft until the window was resized.
+// Size comes from the canvas layout box, not from the first innerWidth we
+// happen to see. DPR stays 1:1 through 2 (100%, 125%, 150%, retina) and
+// steps down only when the buffer would pass a 1920×1080 screen at DPR 2.
+function viewBox() {
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.round(rect.width);
+  const h = Math.round(rect.height);
+  if (w >= 2 && h >= 2) return { w, h };
+  return { w: Math.round(innerWidth), h: Math.round(innerHeight) };
+}
+
+function drawingRatio(w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const budget = 1920 * 1080 * 4;
+  let ratio = dpr;
+  const area = Math.max(1, w * h);
+  while (ratio > 1 && area * ratio * ratio > budget) ratio = Math.max(1, +(ratio - 0.25).toFixed(2));
+  return ratio;
+}
+
+let fitted = '';
+function fitRenderer() {
+  const { w, h } = viewBox();
+  if (w < 2 || h < 2) return;
+  const ratio = drawingRatio(w, h);
+  const key = `${w}x${h}@${ratio}`;
+  if (renderer && key !== fitted) {
+    fitted = key;
+    renderer.setPixelRatio(ratio);
+    renderer.setSize(w, h, false);
+  }
+  active?.resize(w, h);
+}
+
 function getRenderer() {
   if (renderer) return renderer;
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.25 : 1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  fitRenderer();
   return renderer;
 }
 
@@ -135,6 +175,21 @@ function showExhibit(piece) {
   exhibitLabel.hidden = bits.length === 0;
 }
 
+function showDesign(project) {
+  if (current !== 'design' || !project) {
+    designLabel.hidden = true;
+    designLabel.innerHTML = '';
+    return;
+  }
+  const bits = [];
+  if (project.year) bits.push(`<p class="who">${esc(project.year)}</p>`);
+  if (project.title) bits.push(`<h2>${esc(project.title)}</h2>`);
+  if (project.text) bits.push(`<p>${esc(project.text)}</p>`);
+  if (project.links?.length) bits.push(`<p class="facts">${project.links.map((l) => esc(l.label)).join('<br>')}</p>`);
+  designLabel.innerHTML = bits.join('');
+  designLabel.hidden = bits.length === 0;
+}
+
 function renderAbout() {
   const links = ARTIST.links.map((l) => `<a href="${l.href}" rel="noopener">${l.label}</a>`).join('<span aria-hidden="true">·</span>');
   aboutEl.innerHTML = `
@@ -189,7 +244,8 @@ async function ensure(id) {
     if (id === 'ceramics') view.ceramics = createCeramics(r, { reduce, projects: CERAMICS });
     if (id === 'design') view.design = await createDesign(r, { reduce, projects: DESIGN });
     if (id === 'exhibition') view.exhibition = await createExhibition(r, { reduce, pieces: EXHIBITION });
-    view[id].resize(innerWidth, innerHeight);
+    const box = viewBox();
+    view[id].resize(box.w, box.h);
     return view[id];
   })();
   booting = run;
@@ -208,6 +264,7 @@ function applyChrome() {
     else showCards(info.project);
   }
   showExhibit(current === 'exhibition' ? active?.nav()?.piece : null);
+  showDesign(current === 'design' ? active?.nav()?.project : null);
   paintHud();
   paintNav(current);
 }
@@ -220,7 +277,7 @@ async function go(id) {
   active = await ensure(id);
   current = id;
   lastProject = null;
-  if (active) active.resize(innerWidth, innerHeight);
+  fitRenderer();
   applyChrome();
   if (active && renderer) renderer.render(active.scene, active.camera);
   veil.classList.remove('on');
@@ -280,10 +337,31 @@ addEventListener('pointerup', (e) => {
   swipe = null;
 });
 
-addEventListener('resize', () => {
-  if (renderer) renderer.setSize(innerWidth, innerHeight, false);
-  active?.resize(innerWidth, innerHeight);
-});
+addEventListener('resize', () => fitRenderer());
+
+const canvasObserver = new ResizeObserver(() => fitRenderer());
+canvasObserver.observe(canvas);
+
+let dprQuery = null;
+function onDprChange() {
+  fitted = '';
+  watchDpr();
+  fitRenderer();
+}
+function watchDpr() {
+  dprQuery?.removeEventListener('change', onDprChange);
+  dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  dprQuery.addEventListener('change', onDprChange);
+}
+watchDpr();
+
+function settleFit() {
+  fitRenderer();
+  requestAnimationFrame(() => fitRenderer());
+}
+document.addEventListener('DOMContentLoaded', settleFit);
+window.addEventListener('load', settleFit);
+document.fonts?.ready?.then(() => settleFit()).catch(() => {});
 
 const cursor = $('#cursor');
 let cx = innerWidth / 2, cy = innerHeight / 2, tx = cx, ty = cy;
@@ -339,6 +417,7 @@ function frame(now) {
         else showCards(info?.project);
       }
       if (current === 'exhibition') showExhibit(info?.piece);
+      if (current === 'design') showDesign(info?.project);
       paintHud();
     }
   }
