@@ -258,17 +258,34 @@ export async function createDesign(renderer, { reduce, projects }) {
   let index = 0;
   let narrow = false;
   const camTarget = new THREE.Vector3();
-  const look = new THREE.Vector3();
   const focus = new THREE.Vector3();
+  const posFrom = new THREE.Vector3();
+  const posTo = new THREE.Vector3();
+  const lookFrom = new THREE.Vector3();
+  const lookTo = new THREE.Vector3();
+  const lookNow = new THREE.Vector3();
+  const markFrom = new THREE.Vector2();
+  const markTo = new THREE.Vector2();
+  let glideStart = 0;
+  let glideMs = 1;
+  let gliding = false;
+  let glideEaseIn = true;
+
+  function easeGlide(t, easeIn) {
+    if (!easeIn) return 1 - (1 - t) * (1 - t);
+    return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+  }
+
+  function placeMark(x, y) {
+    frame.position.x = niche.position.x = x;
+    frame.position.y = niche.position.y = y;
+  }
 
   function placeFocus(i) {
     const n = projects.length ? (i + projects.length) % projects.length : 0;
     const local = projects.length ? slot(n) : new THREE.Vector3();
     focus.copy(local).add(unit.position);
-    niche.position.x = local.x;
-    niche.position.y = local.y;
-    frame.position.x = local.x;
-    frame.position.y = local.y;
+    markTo.set(local.x, local.y);
   }
 
   function aim(i, snap) {
@@ -277,10 +294,29 @@ export async function createDesign(renderer, { reduce, projects }) {
     const yLift = narrow ? 0.22 : 0.08;
     const xShift = narrow ? 0 : -0.22;
     camTarget.set(focus.x + xShift, focus.y + yLift, focus.z + dist);
-    look.set(focus.x + (narrow ? 0 : -0.05), focus.y - (narrow ? 0.28 : 0.02), focus.z);
+    lookTo.set(focus.x + (narrow ? 0 : -0.05), focus.y - (narrow ? 0.28 : 0.02), focus.z);
+    posTo.copy(camTarget);
     if (snap || reduce) {
-      camera.position.copy(camTarget);
-      camera.lookAt(look);
+      gliding = false;
+      camera.position.copy(posTo);
+      lookNow.copy(lookTo);
+      camera.lookAt(lookNow);
+      placeMark(markTo.x, markTo.y);
+      return;
+    }
+    posFrom.copy(camera.position);
+    lookFrom.copy(lookNow);
+    markFrom.set(frame.position.x, frame.position.y);
+    const distM = Math.max(posFrom.distanceTo(posTo), lookFrom.distanceTo(lookTo));
+    glideMs = Math.min(1600, Math.max(920, 700 + distM * 240));
+    glideEaseIn = !gliding;
+    glideStart = performance.now();
+    gliding = distM > 0.015;
+    if (!gliding) {
+      camera.position.copy(posTo);
+      lookNow.copy(lookTo);
+      camera.lookAt(lookNow);
+      placeMark(markTo.x, markTo.y);
     }
   }
 
@@ -292,11 +328,19 @@ export async function createDesign(renderer, { reduce, projects }) {
     aim(index, true);
   }
 
-  function update(dt) {
-    if (!(reduce)) {
-      camera.position.lerp(camTarget, Math.min(1, dt * 2.6));
-      camera.lookAt(look);
+  function update(dt, now) {
+    if (gliding && !reduce) {
+      const t = Math.min(1, ((now || performance.now()) - glideStart) / glideMs);
+      const e = easeGlide(t, glideEaseIn);
+      camera.position.lerpVectors(posFrom, posTo, e);
+      lookNow.lerpVectors(lookFrom, lookTo, e);
+      placeMark(
+        markFrom.x + (markTo.x - markFrom.x) * e,
+        markFrom.y + (markTo.y - markFrom.y) * e,
+      );
+      if (t >= 1) gliding = false;
     }
+    camera.lookAt(lookNow);
   }
 
   function step(dir) {

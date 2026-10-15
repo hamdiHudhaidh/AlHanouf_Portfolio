@@ -156,7 +156,21 @@ export async function createExhibition(renderer, { reduce, pieces }) {
 
   let index = 0;
   const camTarget = new THREE.Vector3();
-  const look = new THREE.Vector3();
+  const posFrom = new THREE.Vector3();
+  const posTo = new THREE.Vector3();
+  const lookFrom = new THREE.Vector3();
+  const lookTo = new THREE.Vector3();
+  const lookNow = new THREE.Vector3();
+  let glideStart = 0;
+  let glideMs = 1;
+  let gliding = false;
+  let glideEaseIn = true;
+
+  function easeGlide(t, easeIn) {
+    if (!easeIn) return 1 - (1 - t) * (1 - t);
+    return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+  }
+
   function aim(i, snap) {
     const n = Math.max(0, Math.min(focus.length - 1, i));
     const f = focus[n] || new THREE.Vector3(0, 2, 0);
@@ -164,10 +178,26 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const z = narrow ? (sculpt ? 2.35 : 3.15) : (sculpt ? 3.15 : 4.05);
     const y = narrow ? (sculpt ? 1.22 : 1.55) : (sculpt ? 1.32 : 1.62);
     camTarget.set(f.x, y, z);
-    look.set(f.x, sculpt ? 1.2 : f.y, sculpt ? 0.9 : f.z);
-    if (snap) {
-      camera.position.copy(camTarget);
-      camera.lookAt(look);
+    lookTo.set(f.x, sculpt ? 1.2 : f.y, sculpt ? 0.9 : f.z);
+    posTo.copy(camTarget);
+    if (snap || reduce) {
+      gliding = false;
+      camera.position.copy(posTo);
+      lookNow.copy(lookTo);
+      camera.lookAt(lookNow);
+      return;
+    }
+    posFrom.copy(camera.position);
+    lookFrom.copy(lookNow);
+    const distM = Math.max(posFrom.distanceTo(posTo), lookFrom.distanceTo(lookTo));
+    glideMs = Math.min(1700, Math.max(980, 720 + distM * 180));
+    glideEaseIn = !gliding;
+    glideStart = performance.now();
+    gliding = distM > 0.015;
+    if (!gliding) {
+      camera.position.copy(posTo);
+      lookNow.copy(lookTo);
+      camera.lookAt(lookNow);
     }
   }
 
@@ -180,13 +210,15 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     aim(index, true);
   }
 
-  function update(dt) {
-    if (reduce) {
-      camera.position.copy(camTarget);
-    } else {
-      camera.position.lerp(camTarget, Math.min(1, dt * 2.2));
+  function update(dt, now) {
+    if (gliding && !reduce) {
+      const t = Math.min(1, ((now || performance.now()) - glideStart) / glideMs);
+      const e = easeGlide(t, glideEaseIn);
+      camera.position.lerpVectors(posFrom, posTo, e);
+      lookNow.lerpVectors(lookFrom, lookTo, e);
+      if (t >= 1) gliding = false;
     }
-    camera.lookAt(look);
+    camera.lookAt(lookNow);
   }
 
   function step(dir) {

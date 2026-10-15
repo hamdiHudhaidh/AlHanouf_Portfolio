@@ -19,9 +19,9 @@ The page has four scenes. About is a still editorial layout. Graphic Design is a
 
 The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
 
-The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design, the next or previous project moves the camera to that shelf. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
+The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On Graphic Design and Exhibition, the camera glides through the room to the next shelf or the next work. The move is one continuous shot: it eases out of the piece you are leaving and into the next, with no cut and no fade. Another press while that glide is still going retargets it from wherever the camera is. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
 
-If the browser asks for reduced motion, page turns, the wheel, and the gallery dolly cut instead of animating, and the grain overlay holds still.
+If the browser asks for reduced motion, the bookcase and the gallery cut to the piece instead of gliding, the wheel cuts, and the grain overlay holds still.
 
 ## Folder structure
 
