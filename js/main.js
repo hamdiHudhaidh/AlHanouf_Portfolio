@@ -177,9 +177,14 @@ function showExhibit(piece) {
 }
 
 function showDesign(project) {
-  if (current !== 'design' || !project) {
+  if (current !== 'design') {
     designLabel.hidden = true;
     designLabel.innerHTML = '';
+    designLabel.classList.remove('in');
+    return;
+  }
+  if (!project) {
+    designLabel.classList.remove('in');
     return;
   }
   const bits = [];
@@ -192,7 +197,16 @@ function showDesign(project) {
     bits.push(`<div class="board-photos">${more.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>`);
   }
   designLabel.innerHTML = bits.join('');
+  const wasHidden = designLabel.hidden;
   designLabel.hidden = bits.length === 0;
+  if (designLabel.hidden) return;
+  if (reduce || (!wasHidden && designLabel.classList.contains('in'))) {
+    designLabel.classList.add('in');
+    return;
+  }
+  designLabel.classList.remove('in');
+  void designLabel.offsetWidth;
+  designLabel.classList.add('in');
 }
 
 function renderAbout() {

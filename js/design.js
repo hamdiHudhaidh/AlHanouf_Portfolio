@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-// Graphic Design is a print moodboard: every project image on one sheet,
-// hairline leaders to her titles, and a glide from the full board (00)
-// into one work at a time.
+// Graphic Design is a print moodboard. The camera stays on the whole sheet.
+// Choosing a work scales and shifts that cluster, dims the rest, and the
+// panel beside it carries her words. 00 eases everything back.
 
 function loadImage(url) {
   return new Promise((resolve) => {
@@ -335,57 +335,58 @@ export async function createDesign(renderer, { reduce, projects }) {
   let narrow = false;
   let viewW = 1440;
   let viewH = 900;
-  const posFrom = new THREE.Vector3();
-  const posTo = new THREE.Vector3();
-  const lookFrom = new THREE.Vector3();
-  const lookTo = new THREE.Vector3();
-  const lookNow = new THREE.Vector3();
   const satFrom = entries.map(() => 1);
   const satTo = entries.map(() => 1);
   const satNow = entries.map(() => 1);
   const scaleFrom = entries.map(() => 1);
   const scaleTo = entries.map(() => 1);
   const scaleNow = entries.map(() => 1);
+  const posFrom = entries.map((entry) => entry.center.clone());
+  const posTo = entries.map((entry) => entry.center.clone());
+  const posNow = entries.map((entry) => entry.center.clone());
   let swatchFrom = 1;
   let swatchTo = 1;
   let swatchNow = 1;
-  let glideStart = 0;
-  let glideMs = 1;
-  let gliding = false;
-  let glideEaseIn = true;
+  let animStart = 0;
+  let animMs = 1000;
+  let animating = false;
+  let easeIn = true;
   const tmp = new THREE.Vector3();
+  const FOCUS_SCALE = 1.12;
 
-  function frameTarget() {
+  function fitBoard() {
     const fov = narrow ? 40 : 30;
     camera.fov = fov;
-    const aspect = Math.max(0.35, viewW / Math.max(1, viewH));
-    const tanV = Math.tan((fov * Math.PI) / 360);
-    const tanH = tanV * aspect;
-    if (slot === 0 || !entries.length) {
-      const spanX = overview.maxX - overview.minX;
-      const spanY = overview.maxY - overview.minY;
-      const dist = Math.max(spanY / (2 * tanV * 0.9), spanX / (2 * tanH * 0.9), 2);
-      const cx = (overview.minX + overview.maxX) / 2;
-      const cy = (overview.minY + overview.maxY) / 2;
-      lookTo.set(cx, cy, 0);
-      posTo.set(cx, cy, dist);
-      return;
+    camera.aspect = Math.max(0.35, viewW / Math.max(1, viewH));
+    camera.updateProjectionMatrix();
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const spanX = overview.maxX - overview.minX;
+    const spanY = overview.maxY - overview.minY;
+    const dist = Math.max(spanY / (2 * tanV * 0.9), spanX / (2 * tanV * camera.aspect * 0.9), 2);
+    const cx = (overview.minX + overview.maxX) / 2;
+    const cy = (overview.minY + overview.maxY) / 2;
+    camera.position.set(cx, cy, dist);
+    camera.lookAt(cx, cy, 0);
+  }
+
+  function boardVisible() {
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const visH = 2 * camera.position.z * tanV;
+    return { visW: visH * camera.aspect, visH };
+  }
+
+  function placeTarget(i, focus) {
+    const entry = entries[i];
+    posTo[i].copy(entry.center);
+    if (i !== focus) return;
+    const { visW, visH } = boardVisible();
+    if (narrow) {
+      const maxY = overview.maxY - (entry.h * FOCUS_SCALE) / 2 - 0.12;
+      posTo[i].y = Math.min(entry.center.y + visH * 0.07, maxY);
+    } else {
+      const minX = overview.minX + (entry.w * FOCUS_SCALE) / 2 + 0.15;
+      posTo[i].x = Math.max(entry.center.x - visW * 0.085, minX);
     }
-    const entry = entries[slot - 1];
-    const sc = 1.1;
-    const boxW = entry.w * sc + 0.3;
-    const boxH = entry.h * sc + 0.3;
-    const dist = Math.max(
-      boxH / (2 * tanV * (narrow ? 0.32 : 0.68)),
-      boxW / (2 * tanH * (narrow ? 0.78 : 0.46)),
-      1.5,
-    );
-    const visW = 2 * dist * tanH;
-    const visH = 2 * dist * tanV;
-    const biasX = narrow ? 0 : 0.17;
-    const biasY = narrow ? -0.27 : 0;
-    lookTo.set(entry.center.x + biasX * visW, entry.center.y + biasY * visH, 0);
-    posTo.set(lookTo.x, lookTo.y, dist);
   }
 
   function applyVisual() {
@@ -394,7 +395,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       const sc = scaleNow[i];
       entry.uSats.forEach((u) => { u.value = sat; });
       entry.group.scale.setScalar(sc);
-      entry.group.position.z = (sc - 1) * 0.7;
+      entry.group.position.set(posNow[i].x, posNow[i].y, (sc - 1) * 0.7);
       entry.group.updateMatrixWorld(true);
       const fade = 0.14 + 0.66 * sat;
       entry.line.material.opacity = fade;
@@ -425,65 +426,47 @@ export async function createDesign(renderer, { reduce, projects }) {
     const focus = slot === 0 ? -1 : slot - 1;
     entries.forEach((_, i) => {
       satTo[i] = focus === -1 || i === focus ? 1 : 0;
-      scaleTo[i] = i === focus ? 1.1 : 1;
+      scaleTo[i] = i === focus ? FOCUS_SCALE : 1;
+      placeTarget(i, focus);
     });
     swatchTo = focus === -1 ? 1 : 0;
-    frameTarget();
     if (snap || reduce) {
-      gliding = false;
-      camera.position.copy(posTo);
-      lookNow.copy(lookTo);
-      camera.lookAt(lookNow);
       satTo.forEach((v, i) => { satNow[i] = satFrom[i] = v; });
       scaleTo.forEach((v, i) => { scaleNow[i] = scaleFrom[i] = v; });
+      posTo.forEach((v, i) => { posNow[i].copy(v); posFrom[i].copy(v); });
       swatchNow = swatchFrom = swatchTo;
+      animating = false;
       applyVisual();
       return;
     }
-    posFrom.copy(camera.position);
-    lookFrom.copy(lookNow);
     satNow.forEach((v, i) => { satFrom[i] = v; });
     scaleNow.forEach((v, i) => { scaleFrom[i] = v; });
+    posNow.forEach((v, i) => { posFrom[i].copy(v); });
     swatchFrom = swatchNow;
-    const distM = Math.max(posFrom.distanceTo(posTo), lookFrom.distanceTo(lookTo));
-    glideMs = Math.min(1700, Math.max(980, 760 + distM * 70));
-    glideEaseIn = !gliding;
-    glideStart = performance.now();
-    gliding = distM > 0.02;
-    if (!gliding) {
-      camera.position.copy(posTo);
-      lookNow.copy(lookTo);
-      camera.lookAt(lookNow);
-      satTo.forEach((v, i) => { satNow[i] = v; });
-      scaleTo.forEach((v, i) => { scaleNow[i] = v; });
-      swatchNow = swatchTo;
-      applyVisual();
-    }
+    easeIn = !animating;
+    animStart = performance.now();
+    animMs = 1000;
+    animating = true;
   }
 
   function resize(w, h) {
     viewW = w;
     viewH = h;
     narrow = w / h < 0.9;
-    camera.aspect = w / Math.max(1, h);
-    camera.updateProjectionMatrix();
+    fitBoard();
     aim(slot, true);
   }
 
   function update(dt, now) {
-    const moving = gliding && !reduce;
-    let e = 1;
-    if (moving) {
-      const t = Math.min(1, ((now || performance.now()) - glideStart) / glideMs);
-      e = easeGlide(t, glideEaseIn);
-      camera.position.lerpVectors(posFrom, posTo, e);
-      lookNow.lerpVectors(lookFrom, lookTo, e);
-      if (t >= 1) gliding = false;
+    if (animating && !reduce) {
+      const t = Math.min(1, ((now || performance.now()) - animStart) / animMs);
+      const e = easeGlide(t, easeIn);
       satFrom.forEach((v, i) => { satNow[i] = v + (satTo[i] - v) * e; });
       scaleFrom.forEach((v, i) => { scaleNow[i] = v + (scaleTo[i] - v) * e; });
+      posFrom.forEach((v, i) => posNow[i].lerpVectors(v, posTo[i], e));
       swatchNow = swatchFrom + (swatchTo - swatchFrom) * e;
+      if (t >= 1) animating = false;
     }
-    camera.lookAt(lookNow);
     applyVisual();
   }
 
@@ -494,6 +477,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     return true;
   }
 
+  fitBoard();
   aim(0, true);
 
   return {

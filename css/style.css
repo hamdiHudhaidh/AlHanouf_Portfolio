@@ -39,7 +39,8 @@ a{color:inherit}
 .reveal.in{-webkit-mask-size:700% 700%;mask-size:700% 700%}
 #exhibitLabel,#designLabel{background:#f7f1e8;color:var(--ink);border:1px solid rgba(29,27,25,.22);padding:16px 18px 18px;box-shadow:0 16px 40px -24px rgba(40,24,12,.45)}
 #exhibitLabel{position:fixed;left:32px;bottom:108px;z-index:32;width:min(420px,36vw)}
-#designLabel{position:fixed;right:36px;top:108px;bottom:120px;z-index:32;width:min(340px,28vw);overflow:auto}
+#designLabel{position:fixed;right:36px;top:108px;bottom:120px;z-index:32;width:min(340px,28vw);overflow:auto;opacity:0;transform:translateX(22px);transition:opacity .9s ease,transform .9s ease;pointer-events:none}
+#designLabel.in{opacity:1;transform:none;pointer-events:auto}
 #exhibitLabel[hidden],#designLabel[hidden]{display:none}
 #exhibitLabel .who,#designLabel .who{margin:0;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2)}
 #designLabel .who{color:var(--clay)}
@@ -102,7 +103,7 @@ a{color:inherit}
   .i2,.i3{display:none}
   .i1{right:16px;top:84px;width:84px}
   #exhibitLabel{left:14px;right:14px;bottom:188px;width:auto;padding:12px 14px 14px}
-  #designLabel{left:14px;right:14px;top:auto;bottom:188px;width:auto;max-height:28vh;padding:12px 14px 14px}
+  #designLabel{left:14px;right:14px;top:auto;bottom:188px;width:auto;max-height:28vh;padding:12px 14px 14px;transform:translateY(16px)}
   #exhibitLabel h2,#designLabel h2{font-size:26px}
   #designLabel .board-photos{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   #designLabel .board-photos img{max-height:72px;object-fit:cover}
@@ -117,4 +118,5 @@ a{color:inherit}
   .grain{animation:none}
   .reveal,.card{transition:opacity .4s}
   .splat,.loader-wheel{animation:none}
+  #designLabel{transition:none}
 }

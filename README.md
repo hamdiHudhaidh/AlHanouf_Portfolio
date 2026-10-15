@@ -14,14 +14,14 @@ The page has four scenes. About is a still editorial layout. Graphic Design is a
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, links |
 | Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
-| Graphic Design | `#design` | A moodboard. 00 is the whole sheet; each later number glides to one project |
+| Graphic Design | `#design` | A moodboard. The camera stays on the sheet. 00 is the whole board; each later number lifts one project |
 | Exhibition | `#exhibition` | Gallery wall. Three sample paintings and one sample sculpture, each with a museum label |
 
 The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
 
-The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On the moodboard, 00 is the whole sheet. 01 and onward are her projects, in the order they appear in `DESIGN`. The camera glides in one shot from the sheet to the work, and from one work to the next. The move eases through the space. Another press while that glide is still going retargets it from wherever the camera is. Exhibition glides the same way between works. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
+The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On the moodboard, 00 is the whole sheet and the camera does not move. 01 and onward are her projects, in the order they appear in `DESIGN`. The chosen cluster scales up a little and shifts to leave room, the other prints fade to grey, and her words plus the project’s other photos ease in beside it. Another press while that is still moving retargets from the current sizes. 00 eases the sheet back to full colour. Exhibition is different: there the camera glides in one shot from work to work, and a press during that glide retargets it. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
 
-If the browser asks for reduced motion, the moodboard and the gallery cut to the piece instead of gliding, the wheel cuts, and the grain overlay holds still.
+If the browser asks for reduced motion, the moodboard cuts to the scaled work instead of animating, the gallery cuts instead of gliding, the wheel cuts, and the grain overlay holds still.
 
 ## Folder structure
 
@@ -30,7 +30,7 @@ index.html
 css/style.css
 js/main.js            scenes, hash routing, arrows
 js/ceramics.js        potter’s wheel
-js/design.js          moodboard, leader labels, camera glide
+js/design.js          moodboard, leader labels, focus animation
 js/exhibition.js      gallery wall and labels
 js/clay.js            clay shapes for the wheel
 js/projects.js        all editable text and image lists
