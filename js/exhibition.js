@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 
-// Abstract stacked form used when a sculpture has no photograph.
-// It is a generated sample, not a record of anyone's work.
+// Art is a gallery wall. 00 is the whole room, pulled back far enough that
+// the tops of the pieces stay in frame. Each later number glides to one work.
+// The museum label is a plane in the room: beside the piece on a wide screen,
+// below it on a tall one.
+
 function sampleSculpture(x) {
   const pts = [];
   const n = 32;
@@ -40,42 +43,117 @@ function loadTex(url, renderer) {
   });
 }
 
+function wrapLines(g, text, x, y, maxW, lineH, maxLines) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  let line = '';
+  let used = 0;
+  words.forEach((word) => {
+    if (used >= maxLines) return;
+    const test = line ? `${line} ${word}` : word;
+    if (line && g.measureText(test).width > maxW) {
+      g.fillText(line, x, y + used * lineH);
+      used += 1;
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line && used < maxLines) g.fillText(line, x, y + used * lineH);
+}
+
+function labelTexture(piece, renderer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 760;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#f4efe6';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = 'rgba(29,27,25,0.28)';
+  g.lineWidth = 4;
+  g.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+  let y = 92;
+  g.textBaseline = 'alphabetic';
+  if (piece.artist) {
+    g.fillStyle = '#5b554d';
+    g.font = '500 34px Inter, sans-serif';
+    g.fillText(piece.artist, 72, y);
+    y += 28;
+    g.strokeStyle = 'rgba(29,27,25,0.18)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(72, y);
+    g.lineTo(420, y);
+    g.stroke();
+    y += 78;
+  } else {
+    y += 36;
+  }
+
+  const title = [piece.title, piece.year].filter(Boolean).join(', ');
+  if (title) {
+    g.fillStyle = '#1d1b19';
+    g.font = '500 78px Cormorant, serif';
+    wrapLines(g, title, 72, y, 1120, 86, 2);
+    y += title.length > 28 ? 180 : 96;
+  }
+
+  const facts = [piece.medium, piece.dimensions].filter(Boolean).join(' · ');
+  if (facts) {
+    g.fillStyle = '#5b554d';
+    g.font = '400 30px Inter, sans-serif';
+    g.fillText(facts, 72, y);
+    y += 56;
+  }
+  if (piece.description) {
+    g.fillStyle = '#1d1b19';
+    g.font = '400 36px Inter, sans-serif';
+    wrapLines(g, piece.description, 72, y, 1120, 50, 4);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export async function createExhibition(renderer, { reduce, pieces }) {
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e6dfd4');
   scene.background = BG;
-  scene.fog = new THREE.Fog(BG, 8, 22);
+  scene.fog = new THREE.Fog(BG, 16, 42);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
   scene.environmentIntensity = 0.35;
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 40);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
   scene.add(new THREE.AmbientLight(0xfff5ea, 0.35));
   scene.add(new THREE.HemisphereLight(0xfff8f0, 0xb7aa9a, 0.45));
 
   const wall = new THREE.Mesh(
-    new THREE.PlaneGeometry(28, 8),
+    new THREE.PlaneGeometry(40, 10),
     new THREE.MeshStandardMaterial({ color: 0xe7e0d6, roughness: 0.94 }),
   );
-  wall.position.y = 2.4;
+  wall.position.y = 2.6;
   wall.receiveShadow = true;
   scene.add(wall);
   const rail = new THREE.Mesh(
-    new THREE.BoxGeometry(28, 0.035, 0.04),
+    new THREE.BoxGeometry(40, 0.035, 0.04),
     new THREE.MeshStandardMaterial({ color: 0xcfc6ba, roughness: 0.5, metalness: 0.15 }),
   );
   rail.position.set(0, 4.15, 0.02);
   scene.add(rail);
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(28, 16),
+    new THREE.PlaneGeometry(40, 24),
     new THREE.MeshStandardMaterial({ color: 0xcfc4b6, roughness: 0.9 }),
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.z = 3.2;
+  floor.position.z = 4;
   floor.receiveShadow = true;
   scene.add(floor);
   const base = new THREE.Mesh(
-    new THREE.BoxGeometry(28, 0.16, 0.12),
+    new THREE.BoxGeometry(40, 0.16, 0.12),
     new THREE.MeshStandardMaterial({ color: 0xb7aea2, roughness: 0.7 }),
   );
   base.position.set(0, 0.08, 0.04);
@@ -96,10 +174,14 @@ export async function createExhibition(renderer, { reduce, pieces }) {
 
   const loaded = await Promise.all(pieces.map(async (p) => ({ ...p, tex: await loadTex(p.image, renderer) })));
   const gap = 3.1;
-  const focus = [];
+  const works = loaded.map((p, i) => ({
+    ...p,
+    x: (i - (loaded.length - 1) / 2) * gap,
+  }));
 
-  loaded.forEach((p, i) => {
-    const x = (i - (loaded.length - 1) / 2) * gap;
+  const labels = [];
+  works.forEach((p) => {
+    const x = p.x;
     const spot = new THREE.SpotLight(0xfff4e6, 8, 9, 0.45, 0.6, 1);
     spot.position.set(x, 4.3, 2.2);
     spot.target.position.set(x, 1.8, 0);
@@ -123,7 +205,6 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       } else {
         scene.add(sampleSculpture(x));
       }
-      focus.push(new THREE.Vector3(x, 1.15, 0.4));
     } else {
       const frame = new THREE.Mesh(
         new THREE.BoxGeometry(1.55, 1.9, 0.06),
@@ -139,23 +220,34 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         art.position.set(x, 2.15, 0.08);
         scene.add(art);
       }
-      focus.push(new THREE.Vector3(x, 1.85, 0));
     }
+
+    const plaque = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: labelTexture(p, renderer),
+        transparent: true,
+        depthWrite: true,
+      }),
+    );
+    plaque.renderOrder = 2;
+    scene.add(plaque);
+    labels.push({ work: p, mesh: plaque });
   });
 
-  // Two pools of light so an empty room still reads as a gallery.
-  if (!loaded.length) {
+  if (!works.length) {
     for (const x of [-1.6, 1.6]) {
       const spot = new THREE.SpotLight(0xfff1e2, 6, 10, 0.5, 0.55, 1);
       spot.position.set(x, 4.4, 2.4);
       spot.target.position.set(x * 0.3, 2.1, 0);
       scene.add(spot, spot.target);
     }
-    focus.push(new THREE.Vector3(0, 2.0, 0));
   }
 
-  let index = 0;
+  let slot = 0;
+  let narrow = false;
   const camTarget = new THREE.Vector3();
+  const lookTarget = new THREE.Vector3();
   const posFrom = new THREE.Vector3();
   const posTo = new THREE.Vector3();
   const lookFrom = new THREE.Vector3();
@@ -171,15 +263,91 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
   }
 
-  function aim(i, snap) {
-    const n = Math.max(0, Math.min(focus.length - 1, i));
-    const f = focus[n] || new THREE.Vector3(0, 2, 0);
-    const sculpt = loaded[n]?.kind === 'sculpture';
-    const z = narrow ? (sculpt ? 2.35 : 3.15) : (sculpt ? 3.15 : 4.05);
-    const y = narrow ? (sculpt ? 1.22 : 1.55) : (sculpt ? 1.32 : 1.62);
-    camTarget.set(f.x, y, z);
-    lookTo.set(f.x, sculpt ? 1.2 : f.y, sculpt ? 0.9 : f.z);
+  function pieceBox(work) {
+    if (work.kind === 'sculpture') {
+      return { minX: work.x - 0.5, maxX: work.x + 0.5, minY: 0.02, maxY: 2.08, z: 1.05 };
+    }
+    return { minX: work.x - 0.84, maxX: work.x + 0.84, minY: 1.12, maxY: 3.18, z: 0 };
+  }
+
+  function labelBox(work) {
+    const b = pieceBox(work);
+    const lw = narrow ? 1.32 : 1.05;
+    const lh = narrow ? 0.74 : 0.7;
+    if (narrow) {
+      const y = work.kind === 'sculpture' ? 0.46 : b.minY - 0.14 - lh / 2;
+      const z = work.kind === 'sculpture' ? 1.52 : 0.1;
+      return { x: work.x, y, w: lw, h: lh, z };
+    }
+    return {
+      x: b.maxX + 0.18 + lw / 2,
+      y: work.kind === 'sculpture' ? 1.08 : 1.82,
+      w: lw,
+      h: lh,
+      z: work.kind === 'sculpture' ? 1.22 : 0.1,
+    };
+  }
+
+  function layoutLabels() {
+    labels.forEach((label) => {
+      const box = labelBox(label.work);
+      label.mesh.position.set(box.x, box.y, box.z);
+      label.mesh.scale.set(box.w, box.h, 1);
+    });
+  }
+
+  function fitPose(minX, maxX, minY, maxY, lookZ) {
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const spanX = Math.max(0.5, maxX - minX);
+    const spanY = Math.max(0.5, maxY - minY);
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const aspect = Math.max(0.35, camera.aspect);
+    const dist = Math.max(
+      spanY / (2 * tanV * 0.9),
+      spanX / (2 * tanV * aspect * 0.9),
+    ) * 1.08;
+    camTarget.set(cx, cy, lookZ + dist);
+    lookTarget.set(cx, cy, lookZ);
+  }
+
+  function overviewPose() {
+    if (!works.length) {
+      fitPose(-2.2, 2.2, 0.2, 3.5, 0);
+      return;
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    works.forEach((work) => {
+      const b = pieceBox(work);
+      const l = labelBox(work);
+      minX = Math.min(minX, b.minX, l.x - l.w / 2);
+      maxX = Math.max(maxX, b.maxX, l.x + l.w / 2);
+      minY = Math.min(minY, b.minY, l.y - l.h / 2, 0);
+      maxY = Math.max(maxY, b.maxY + 0.36, l.y + l.h / 2);
+    });
+    fitPose(minX - 0.45, maxX + 0.45, minY - 0.25, maxY, 0);
+  }
+
+  function poseFor(work) {
+    const b = pieceBox(work);
+    const l = labelBox(work);
+    const minX = Math.min(b.minX, l.x - l.w / 2) - 0.2;
+    const maxX = Math.max(b.maxX, l.x + l.w / 2) + 0.22;
+    const minY = Math.min(b.minY, l.y - l.h / 2) - 0.16;
+    const maxY = Math.max(b.maxY, l.y + l.h / 2) + 0.38;
+    fitPose(minX, maxX, minY, maxY, b.z);
+  }
+
+  function aim(next, snap) {
+    const count = works.length + 1;
+    slot = ((next % count) + count) % count;
+    if (slot === 0) overviewPose();
+    else poseFor(works[slot - 1]);
     posTo.copy(camTarget);
+    lookTo.copy(lookTarget);
     if (snap || reduce) {
       gliding = false;
       camera.position.copy(posTo);
@@ -201,13 +369,13 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     }
   }
 
-  let narrow = false;
   function resize(w, h) {
     narrow = w / h < 0.9;
-    camera.aspect = w / h;
+    camera.aspect = w / Math.max(1, h);
     camera.fov = narrow ? 38 : 32;
     camera.updateProjectionMatrix();
-    aim(index, true);
+    layoutLabels();
+    aim(slot, true);
   }
 
   function update(dt, now) {
@@ -222,12 +390,12 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }
 
   function step(dir) {
-    if (loaded.length < 2) return false;
-    index = (index + dir + loaded.length) % loaded.length;
-    aim(index, reduce);
+    if (works.length < 1) return false;
+    aim(slot + dir, reduce);
     return true;
   }
 
+  layoutLabels();
   aim(0, true);
 
   return {
@@ -237,10 +405,10 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     update,
     step,
     nav: () => ({
-      index,
-      total: loaded.length,
-      label: loaded[index]?.title || '',
-      piece: loaded[index] || null,
+      index: slot - 1,
+      total: works.length,
+      label: slot > 0 ? (works[slot - 1]?.title || '') : '',
+      piece: slot > 0 ? works[slot - 1] : null,
     }),
   };
 }

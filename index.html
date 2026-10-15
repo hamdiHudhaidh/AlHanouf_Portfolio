@@ -22,10 +22,10 @@
 <div id="veil" aria-hidden="true"></div>
 
 <header class="nav">
-  <a class="brand" href="#about" aria-label="About">
-    <span class="brand-mark"></span>
-    <span class="brand-name" id="brandName">Alhanouf Khalid</span>
-  </a>
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name" id="pageName">About</span>
+  </div>
   <nav class="nav-links">
     <button id="soundBtn" aria-pressed="false" title="Sound">Sound <i>off</i></button>
   </nav>
@@ -33,7 +33,6 @@
 
 <section id="about" aria-label="About"></section>
 <main id="content" aria-live="polite"></main>
-<aside id="exhibitLabel" hidden></aside>
 <aside id="designLabel" hidden></aside>
 <div id="boardLabels" hidden></div>
 
@@ -46,15 +45,8 @@
   </div>
 </div>
 
-<nav class="scene-nav" id="sceneNav" aria-label="Scenes">
-  <button id="sceneToggle" class="scene-toggle" aria-expanded="false">About</button>
-  <div class="scene-links">
-    <a href="#about" data-scene="about">About</a>
-    <a href="#ceramics" data-scene="ceramics">Ceramics</a>
-    <a href="#design" data-scene="design">Graphic Design</a>
-    <a href="#exhibition" data-scene="exhibition">Exhibition</a>
-  </div>
-</nav>
+<a class="page-link page-prev" id="pagePrev" href="#art">Art</a>
+<a class="page-link page-next" id="pageNext" href="#ceramics">Ceramics</a>
 
 <div id="cursor" aria-hidden="true"><span></span></div>
 <noscript><p class="noscript">This portfolio needs JavaScript.</p></noscript>

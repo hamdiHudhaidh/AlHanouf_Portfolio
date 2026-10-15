@@ -12,13 +12,11 @@ const loader = $('#loader');
 const canvas = $('#scene');
 const aboutEl = $('#about');
 const content = $('#content');
-const exhibitLabel = $('#exhibitLabel');
 const designLabel = $('#designLabel');
 const boardLabels = $('#boardLabels');
 const splats = $('#splats');
 const veil = $('#veil');
 const hud = $('#hud');
-const sceneNav = $('#sceneNav');
 
 let renderer = null;
 
@@ -72,7 +70,7 @@ function getRenderer() {
   return renderer;
 }
 
-const view = { ceramics: null, design: null, exhibition: null };
+const view = { ceramics: null, design: null, art: null };
 let current = '';
 let active = null;
 let booting = null;
@@ -159,23 +157,6 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-function showExhibit(piece) {
-  if (current !== 'exhibition' || !piece) {
-    exhibitLabel.hidden = true;
-    exhibitLabel.innerHTML = '';
-    return;
-  }
-  const title = [piece.title, piece.year].filter(Boolean).join(', ');
-  const facts = [piece.medium, piece.dimensions].filter(Boolean).join(' · ');
-  const bits = [];
-  if (piece.artist) bits.push(`<p class="who">${esc(piece.artist)}</p>`);
-  if (title) bits.push(`<h2>${esc(title)}</h2>`);
-  if (facts) bits.push(`<p class="facts">${esc(facts)}</p>`);
-  if (piece.description) bits.push(`<p>${esc(piece.description)}</p>`);
-  exhibitLabel.innerHTML = bits.join('');
-  exhibitLabel.hidden = bits.length === 0;
-}
-
 function showDesign(project) {
   if (current !== 'design') {
     designLabel.hidden = true;
@@ -191,10 +172,12 @@ function showDesign(project) {
   if (project.year) bits.push(`<p class="who">${esc(project.year)}</p>`);
   if (project.title) bits.push(`<h2>${esc(project.title)}</h2>`);
   if (project.text) bits.push(`<p>${esc(project.text)}</p>`);
-  if (project.links?.length) bits.push(`<p class="facts">${project.links.map((l) => esc(l.label)).join('<br>')}</p>`);
+  if (project.links?.length) {
+    bits.push(`<p class="facts">${project.links.map((l) => `<a href="${esc(l.href)}" rel="noopener">${esc(l.label)}</a>`).join('<br>')}</p>`);
+  }
   const more = (project.images || []).slice(1);
   if (more.length) {
-    bits.push(`<div class="board-photos">${more.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>`);
+    bits.push(`<div class="board-photos">${more.map((src) => `<img src="${esc(src)}" alt="${esc(project.title || '')}">`).join('')}</div>`);
   }
   designLabel.innerHTML = bits.join('');
   const wasHidden = designLabel.hidden;
@@ -220,7 +203,6 @@ function renderAbout() {
       <p class="eyebrow">${ARTIST.name}</p>
       <h1>${ARTIST.welcome}</h1>
       <p class="about-links">${links}</p>
-      <p class="source-line">Originally published at <a href="${ARTIST.source}" rel="noopener">alhanoufalaswad.myportfolio.com</a></p>
     </div>`;
   if (!reduce) {
     aboutEl.querySelectorAll('.portrait, .about-copy').forEach((el, i) => {
@@ -232,14 +214,18 @@ function renderAbout() {
 }
 
 function paintNav(id) {
-  sceneNav.querySelectorAll('[data-scene]').forEach((a) => {
-    const on = a.dataset.scene === id;
-    a.classList.toggle('active', on);
-    if (on) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  });
-  const label = SCENES.find((s) => s.id === id)?.label || '';
-  $('#sceneToggle').textContent = label;
+  const count = SCENES.length;
+  const index = Math.max(0, SCENES.findIndex((s) => s.id === id));
+  const currentScene = SCENES[index];
+  const prev = SCENES[(index - 1 + count) % count];
+  const next = SCENES[(index + 1) % count];
+  $('#pageName').textContent = currentScene.label;
+  const prevEl = $('#pagePrev');
+  const nextEl = $('#pageNext');
+  prevEl.textContent = prev.label;
+  prevEl.href = prev.hash;
+  nextEl.textContent = next.label;
+  nextEl.href = next.hash;
   document.body.dataset.scene = id;
 }
 
@@ -262,7 +248,7 @@ async function ensure(id) {
     const r = getRenderer();
     if (id === 'ceramics') view.ceramics = createCeramics(r, { reduce, projects: CERAMICS });
     if (id === 'design') view.design = await createDesign(r, { reduce, projects: DESIGN });
-    if (id === 'exhibition') view.exhibition = await createExhibition(r, { reduce, pieces: EXHIBITION });
+    if (id === 'art') view.art = await createExhibition(r, { reduce, pieces: EXHIBITION });
     const box = viewBox();
     view[id].resize(box.w, box.h);
     return view[id];
@@ -282,7 +268,6 @@ function applyChrome() {
     if (info.hiding) hideCards();
     else showCards(info.project);
   }
-  showExhibit(current === 'exhibition' ? active?.nav()?.piece : null);
   showDesign(current === 'design' ? active?.nav()?.project : null);
   boardLabels.hidden = current !== 'design';
   paintHud();
@@ -304,18 +289,22 @@ async function go(id) {
 }
 
 function sceneFromHash() {
-  const id = location.hash.replace('#', '');
-  return SCENES.some((s) => s.id === id) ? id : 'about';
+  const id = location.hash.replace('#', '').split('?')[0];
+  if (id === 'exhibition') {
+    history.replaceState(null, '', '#art');
+    return 'art';
+  }
+  if (!SCENES.some((s) => s.id === id)) {
+    history.replaceState(null, '', '#about');
+    return 'about';
+  }
+  return id;
 }
 
 addEventListener('hashchange', () => { go(sceneFromHash()); });
 
 $('#prevBtn').addEventListener('click', () => step(-1));
 $('#nextBtn').addEventListener('click', () => step(1));
-$('#sceneToggle').addEventListener('click', () => sceneNav.classList.toggle('open'));
-sceneNav.querySelectorAll('[data-scene]').forEach((a) => {
-  a.addEventListener('click', () => sceneNav.classList.remove('open'));
-});
 
 function step(dir) {
   if (!active?.step) return;
@@ -336,7 +325,6 @@ addEventListener('keydown', (e) => {
   if (e.code === 'ArrowRight') { e.preventDefault(); step(1); }
   if (e.code === 'ArrowLeft') { e.preventDefault(); step(-1); }
   if (e.code === 'Space' && current !== 'about') { e.preventDefault(); if (!e.repeat) step(1); }
-  if (e.code === 'Escape') sceneNav.classList.remove('open');
 });
 
 let swipe = null;
@@ -436,7 +424,6 @@ function frame(now) {
         if (info?.hiding) hideCards();
         else showCards(info?.project);
       }
-      if (current === 'exhibition') showExhibit(info?.piece);
       if (current === 'design') showDesign(info?.project);
       paintHud();
     }
@@ -452,8 +439,6 @@ function frame(now) {
 }
 
 renderAbout();
-$('#brandName').textContent = ARTIST.mark;
-if (!location.hash || !SCENES.some((s) => s.hash === location.hash)) history.replaceState(null, '', '#about');
 go(sceneFromHash()).then(() => {
   document.fonts.ready.then(() => setTimeout(() => loader.classList.add('done'), reduce ? 0 : 500));
 });

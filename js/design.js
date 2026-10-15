@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
-// Graphic Design is a print moodboard. The camera stays on the whole sheet.
-// Choosing a work scales and shifts that cluster, dims the rest, and the
-// panel beside it carries her words. 00 eases everything back.
+// Design is a print moodboard. The camera stays on the whole sheet.
+// Prints sit at slight angles and overlap, the way a pinned board does.
+// Choosing a work enlarges that cluster and lays a white veil over the others.
+// Her words and the project's other photos sit on the page, over that veil.
+// 00 eases everything back. The camera does not move.
 
 function loadImage(url) {
   return new Promise((resolve) => {
@@ -18,24 +20,12 @@ function easeGlide(t, easeIn) {
   return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
 }
 
-function printMaterial(map, uSat) {
-  const mat = new THREE.MeshBasicMaterial({ map, color: 0xffffff });
-  mat.customProgramCacheKey = () => 'moodboard-sat';
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uSat = uSat;
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uSat;')
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-         {
-           float luma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-           diffuseColor.rgb = mix(vec3(luma), diffuseColor.rgb, uSat);
-           diffuseColor.rgb *= mix(0.56, 1.0, uSat);
-         }`,
-      );
+function rand(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
   };
-  return mat;
 }
 
 function blob(rx, ry) {
@@ -52,70 +42,89 @@ function blob(rx, ry) {
   return new THREE.ShapeGeometry(shape);
 }
 
-// Shelf-pack one project's photos into a loose block. Sizes follow the real
-// aspect ratios. The first image is a little larger than the rest.
-function arrange(aspects) {
+function rotHalf(w, h, rot) {
+  const c = Math.abs(Math.cos(rot));
+  const s = Math.abs(Math.sin(rot));
+  return { hw: (w * c + h * s) / 2, hh: (w * s + h * c) / 2 };
+}
+
+// Pack one project's photos into a loose, overlapping cluster.
+// The first image stays a little larger than the rest. Rotation and overlap
+// come from a fixed seed so the board does not reshuffle on each visit.
+function arrange(aspects, seed) {
+  const rnd = rand(seed);
   const n = aspects.length;
-  const cellH = n > 5 ? 0.98 : n > 2 ? 1.2 : n > 1 ? 1.42 : 1.85;
+  const cellH = n > 5 ? 1.02 : n > 2 ? 1.24 : n > 1 ? 1.48 : 1.92;
   const items = aspects.map((ar, i) => {
-    const emphasis = i === 0 ? 1.26 : 0.84 + (i % 3) * 0.07;
+    const emphasis = i === 0 ? 1.16 + rnd() * 0.1 : 0.72 + rnd() * 0.3;
     let h = cellH * emphasis;
-    let w = h * ar;
-    const maxW = n === 1 ? 3.15 : 2.28;
+    let w = h * Math.max(0.2, ar);
+    const maxW = n === 1 ? 2.9 : 2.08;
     if (w > maxW) {
-      w = maxW;
-      h = w / ar;
+      w = maxW * (0.86 + rnd() * 0.14);
+      h = w / Math.max(0.2, ar);
     }
-    return { w, h };
+    return { w, h, rot: (rnd() - 0.5) * 0.28 };
   });
-  const maxRow = n > 4 ? 5.35 : 4.7;
-  const gap = 0.11;
+
+  const maxRow = n > 4 ? 4.85 : 4.15;
   const rows = [];
   let row = [];
   let rowW = 0;
   items.forEach((it) => {
-    const next = rowW + (row.length ? gap : 0) + it.w;
-    if (row.length && next > maxRow) {
+    const peek = rowW + (row.length ? -(0.08 + rnd() * 0.1) : 0) + it.w;
+    if (row.length && peek > maxRow) {
       rows.push(row);
       row = [];
       rowW = 0;
     }
-    row.push(it);
-    rowW += (row.length > 1 ? gap : 0) + it.w;
+    const gap = row.length ? -(0.07 + rnd() * 0.12) : 0;
+    row.push({ ...it, gap });
+    rowW += it.w + (row.length > 1 ? gap : 0);
   });
   if (row.length) rows.push(row);
 
-  let y = 0;
   const placed = [];
-  rows.forEach((r, ri) => {
+  let y = 0;
+  rows.forEach((r) => {
     const h = Math.max(...r.map((it) => it.h));
-    const w = r.reduce((s, it) => s + it.w, 0) + gap * (r.length - 1);
-    let x = -w / 2 + (ri % 2 === 0 ? -0.07 : 0.09);
-    r.forEach((it, ii) => {
-      const oy = ((ii % 2 === 0 ? 1 : -1) * Math.min(0.05, (h - it.h) * 0.35));
-      placed.push({ x: x + it.w / 2, y: -(y + it.h / 2) + oy, w: it.w, h: it.h });
-      x += it.w + gap;
+    let w = 0;
+    r.forEach((it, idx) => { w += it.w + (idx ? it.gap : 0); });
+    let x = -w / 2 + (rnd() - 0.5) * 0.32;
+    const rowShift = (rnd() - 0.5) * 0.18;
+    r.forEach((it) => {
+      placed.push({
+        x: x + it.w / 2,
+        y: -(y + h / 2) + (rnd() - 0.5) * 0.22 + rowShift,
+        w: it.w,
+        h: it.h,
+        rot: it.rot,
+      });
+      x += it.w + it.gap;
     });
-    y += h + gap + 0.02;
+    y += h * (0.72 + rnd() * 0.12);
   });
-  const height = Math.max(0.2, y - gap);
-  const shift = height / 2;
+
+  if (!placed.length) return { placed, width: 1, height: 1 };
+
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
   placed.forEach((p) => {
-    p.y += shift;
-    minX = Math.min(minX, p.x - p.w / 2);
-    maxX = Math.max(maxX, p.x + p.w / 2);
-    minY = Math.min(minY, p.y - p.h / 2);
-    maxY = Math.max(maxY, p.y + p.h / 2);
+    const { hw, hh } = rotHalf(p.w, p.h, p.rot);
+    minX = Math.min(minX, p.x - hw);
+    maxX = Math.max(maxX, p.x + hw);
+    minY = Math.min(minY, p.y - hh);
+    maxY = Math.max(maxY, p.y + hh);
   });
-  return {
-    placed,
-    width: Math.max(0.2, maxX - minX),
-    height: Math.max(0.2, maxY - minY),
-  };
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  placed.forEach((p) => {
+    p.x -= midX;
+    p.y -= midY;
+  });
+  return { placed, width: Math.max(0.2, maxX - minX), height: Math.max(0.2, maxY - minY) };
 }
 
 export async function createDesign(renderer, { reduce, projects }) {
@@ -142,9 +151,12 @@ export async function createDesign(renderer, { reduce, projects }) {
     return t;
   }
 
-  const blocks = loaded.map((images, i) => ({ ...arrange(images.map((image) => image.ar)), index: i }));
-  const gapB = 0.36;
-  const colGap = 0.48;
+  const blocks = loaded.map((images, i) => ({
+    ...arrange(images.map((image) => image.ar), 1200 + i * 97),
+    index: i,
+  }));
+  const rndCol = rand(418);
+  const colGap = 0.16;
   const columns = [[], []];
   blocks.forEach((block, i) => columns[i % 2].push(block));
   const colW = columns.map((col) => Math.max(1, ...col.map((block) => block.width), 1));
@@ -152,18 +164,23 @@ export async function createDesign(renderer, { reduce, projects }) {
   const colX = [-totalW / 2 + colW[0] / 2, totalW / 2 - colW[1] / 2];
   const placedBlocks = [];
   columns.forEach((col, side) => {
-    let top = side === 1 ? -0.42 : 0;
+    let top = side === 1 ? -0.48 - rndCol() * 0.4 : rndCol() * 0.25;
     col.forEach((block) => {
+      const groupRot = (rndCol() - 0.5) * 0.11;
       placedBlocks[block.index] = {
         ...block,
-        centerX: colX[side],
+        centerX: colX[side] + (rndCol() - 0.5) * 0.5,
         centerY: top - block.height / 2,
         side: side === 0 ? 'left' : 'right',
+        groupRot,
       };
-      top -= block.height + gapB;
+      top -= block.height - (0.04 + rndCol() * 0.24);
     });
   });
-  const ys = placedBlocks.map((block) => [block.centerY - block.height / 2, block.centerY + block.height / 2]).flat();
+  const ys = placedBlocks.map((block) => {
+    const { hh } = rotHalf(block.width, block.height, block.groupRot);
+    return [block.centerY - hh, block.centerY + hh];
+  }).flat();
   const yShift = ys.length ? -((Math.min(...ys) + Math.max(...ys)) / 2) : 0;
   placedBlocks.forEach((block) => { block.centerY += yShift; });
 
@@ -172,10 +189,11 @@ export async function createDesign(renderer, { reduce, projects }) {
   let clusterMinY = Infinity;
   let clusterMaxY = -Infinity;
   placedBlocks.forEach((block) => {
-    clusterMinX = Math.min(clusterMinX, block.centerX - block.width / 2);
-    clusterMaxX = Math.max(clusterMaxX, block.centerX + block.width / 2);
-    clusterMinY = Math.min(clusterMinY, block.centerY - block.height / 2);
-    clusterMaxY = Math.max(clusterMaxY, block.centerY + block.height / 2);
+    const { hw, hh } = rotHalf(block.width, block.height, block.groupRot);
+    clusterMinX = Math.min(clusterMinX, block.centerX - hw);
+    clusterMaxX = Math.max(clusterMaxX, block.centerX + hw);
+    clusterMinY = Math.min(clusterMinY, block.centerY - hh);
+    clusterMaxY = Math.max(clusterMaxY, block.centerY + hh);
   });
   if (!placedBlocks.length) {
     clusterMinX = -1;
@@ -189,37 +207,52 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   const entries = [];
   const swatches = [];
-  const grey = new THREE.Color('#7d7872');
+  const wash = new THREE.Color('#ffffff');
 
   placedBlocks.forEach((block, i) => {
     const group = new THREE.Group();
     group.position.set(block.centerX, block.centerY, 0);
+    group.rotation.z = block.groupRot;
     scene.add(group);
-    const uSats = [];
     const images = loaded[i];
     let hero = null;
     images.forEach((image, ii) => {
       const spot = block.placed[ii];
-      const uSat = { value: 1 };
-      uSats.push(uSat);
-      const mat = printMaterial(textureOf(image.img), uSat);
+      const mat = new THREE.MeshBasicMaterial({
+        map: textureOf(image.img),
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1,
+        depthWrite: true,
+      });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spot.w, spot.h), mat);
-      mesh.position.set(spot.x, spot.y, 0.05 + ii * 0.004);
-      mesh.rotation.z = ((i * 3 + ii * 5) % 5 - 2) * 0.007;
+      mesh.position.set(spot.x, spot.y, 0.06 + ii * 0.014);
+      mesh.rotation.z = spot.rot;
+      mesh.renderOrder = 1;
       group.add(mesh);
       const shade = new THREE.Mesh(
         new THREE.PlaneGeometry(spot.w, spot.h),
-        new THREE.MeshBasicMaterial({ color: 0x2a2622, transparent: true, opacity: 0.07, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: 0x2a2622, transparent: true, opacity: 0.08, depthWrite: false }),
       );
-      shade.position.set(spot.x + 0.035, spot.y - 0.04, 0.03);
+      shade.position.set(spot.x + 0.04, spot.y - 0.045, 0.03 + ii * 0.014);
+      shade.rotation.z = spot.rot;
+      shade.renderOrder = 0;
       group.add(shade);
       if (ii === 0) hero = mesh;
     });
 
+    const veil = new THREE.Mesh(
+      new THREE.PlaneGeometry(block.width + 0.28, block.height + 0.28),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    veil.position.z = 0.42;
+    veil.renderOrder = 3;
+    group.add(veil);
+
     const outward = block.side === 'right' ? 1 : -1;
     const anchor = new THREE.Vector3(
-      block.centerX + outward * (block.width / 2 + 0.42),
-      block.centerY + (i % 2 === 0 ? 0.18 : -0.14),
+      block.centerX + outward * (block.width / 2 + 0.58),
+      block.centerY + (i % 2 === 0 ? 0.2 : -0.16),
       0,
     );
     const dotMat = new THREE.MeshBasicMaterial({ color: 0x1d1b19, transparent: true, opacity: 0.8 });
@@ -228,11 +261,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (hero) {
       const spot = block.placed[0];
       dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.042, 18), dotMat);
-      dotMesh.position.set(outward * (spot.w / 2 + 0.01), 0, 0.03);
+      dotMesh.position.set(outward * (spot.w / 2 + 0.02), 0, 0.04);
       hero.add(dotMesh);
     }
     const endDot = new THREE.Mesh(new THREE.CircleGeometry(0.026, 14), endMat);
-    endDot.position.set(anchor.x, anchor.y, 0.1);
+    endDot.position.set(anchor.x, anchor.y, 0.12);
     scene.add(endDot);
 
     const lineGeo = new THREE.BufferGeometry();
@@ -249,10 +282,10 @@ export async function createDesign(renderer, { reduce, projects }) {
 
     entries.push({
       group,
+      veil,
       center: new THREE.Vector3(block.centerX, block.centerY, 0),
       w: block.width,
       h: block.height,
-      uSats,
       dotMesh,
       dotMat,
       endMat,
@@ -267,7 +300,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   ['left', 'right'].forEach((side) => {
     const col = entries.filter((entry) => entry.side === side).sort((a, b) => b.anchor.y - a.anchor.y);
     for (let i = 1; i < col.length; i++) {
-      const limit = col[i - 1].anchor.y - 0.46;
+      const limit = col[i - 1].anchor.y - 0.42;
       if (col[i].anchor.y > limit) col[i].anchor.y = limit;
     }
   });
@@ -276,14 +309,14 @@ export async function createDesign(renderer, { reduce, projects }) {
   });
 
   const swatchSpots = [
-    { fx: -0.02, fy: 1.01, rx: 0.5, ry: 0.3, rot: 0.45, color: '#a8603f' },
+    { fx: -0.02, fy: 1.02, rx: 0.5, ry: 0.3, rot: 0.45, color: '#a8603f' },
     { fx: 1.03, fy: 0.94, rx: 0.36, ry: 0.5, rot: -0.35, color: '#2c2824' },
-    { fx: -0.04, fy: 0.62, rx: 0.28, ry: 0.4, rot: 0.2, color: '#8c4a2f' },
-    { fx: 1.05, fy: 0.46, rx: 0.48, ry: 0.26, rot: 0.18, color: '#b7ab9c' },
-    { fx: 0.02, fy: 0.16, rx: 0.34, ry: 0.22, rot: -0.55, color: '#5b554d' },
-    { fx: 0.98, fy: 0.08, rx: 0.42, ry: 0.28, rot: 0.4, color: '#6e3b2a' },
-    { fx: 0.58, fy: 1.05, rx: 0.32, ry: 0.18, rot: -0.25, color: '#c4a090' },
-    { fx: 0.34, fy: -0.03, rx: 0.24, ry: 0.16, rot: 0.7, color: '#1d1b19' },
+    { fx: -0.05, fy: 0.58, rx: 0.28, ry: 0.4, rot: 0.2, color: '#8c4a2f' },
+    { fx: 1.05, fy: 0.42, rx: 0.48, ry: 0.26, rot: 0.18, color: '#b7ab9c' },
+    { fx: 0.01, fy: 0.14, rx: 0.34, ry: 0.22, rot: -0.55, color: '#5b554d' },
+    { fx: 0.98, fy: 0.06, rx: 0.42, ry: 0.28, rot: 0.4, color: '#6e3b2a' },
+    { fx: 0.56, fy: 1.06, rx: 0.32, ry: 0.18, rot: -0.25, color: '#c4a090' },
+    { fx: 0.32, fy: -0.04, rx: 0.24, ry: 0.16, rot: 0.7, color: '#1d1b19' },
   ];
   const spanW = clusterMaxX - clusterMinX;
   const spanH = clusterMaxY - clusterMinY;
@@ -303,9 +336,9 @@ export async function createDesign(renderer, { reduce, projects }) {
     swatches.push(mesh);
   });
 
-  const padL = 3.15;
-  const padR = 6.4;
-  const padY = 1.15;
+  const padL = 2.6;
+  const padR = 5.6;
+  const padY = 1.05;
   const paperW = spanW + padL + padR;
   const paperH = spanH + padY * 2;
   const paperCx = (clusterMinX - padL + clusterMaxX + padR) / 2;
@@ -325,19 +358,19 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   const labelXs = entries.map((entry) => entry.anchor.x);
   const overview = {
-    minX: Math.min(clusterMinX, ...labelXs, clusterMinX) - 2.15,
-    maxX: Math.max(clusterMaxX, ...labelXs, clusterMaxX) + 2.15,
-    minY: clusterMinY - 0.55,
-    maxY: clusterMaxY + 0.55,
+    minX: Math.min(clusterMinX, ...labelXs) - 1.7,
+    maxX: Math.max(clusterMaxX, ...labelXs) + 1.7,
+    minY: clusterMinY - 0.5,
+    maxY: clusterMaxY + 0.5,
   };
 
   let slot = 0;
   let narrow = false;
   let viewW = 1440;
   let viewH = 900;
-  const satFrom = entries.map(() => 1);
-  const satTo = entries.map(() => 1);
-  const satNow = entries.map(() => 1);
+  const veilFrom = entries.map(() => 0);
+  const veilTo = entries.map(() => 0);
+  const veilNow = entries.map(() => 0);
   const scaleFrom = entries.map(() => 1);
   const scaleTo = entries.map(() => 1);
   const scaleNow = entries.map(() => 1);
@@ -352,7 +385,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   let animating = false;
   let easeIn = true;
   const tmp = new THREE.Vector3();
-  const FOCUS_SCALE = 1.12;
+  const FOCUS_SCALE = 1.62;
 
   function fitBoard() {
     const fov = narrow ? 40 : 30;
@@ -381,31 +414,36 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (i !== focus) return;
     const { visW, visH } = boardVisible();
     if (narrow) {
-      const maxY = overview.maxY - (entry.h * FOCUS_SCALE) / 2 - 0.12;
-      posTo[i].y = Math.min(entry.center.y + visH * 0.07, maxY);
+      const limit = overview.maxY - (entry.h * FOCUS_SCALE) / 2 - 0.08;
+      posTo[i].y = Math.min(entry.center.y + visH * 0.2, limit);
     } else {
-      const minX = overview.minX + (entry.w * FOCUS_SCALE) / 2 + 0.15;
-      posTo[i].x = Math.max(entry.center.x - visW * 0.085, minX);
+      const limit = overview.minX + (entry.w * FOCUS_SCALE) / 2 + 0.12;
+      posTo[i].x = Math.max(entry.center.x - visW * 0.18, limit);
     }
   }
 
   function applyVisual() {
     entries.forEach((entry, i) => {
-      const sat = satNow[i];
       const sc = scaleNow[i];
-      entry.uSats.forEach((u) => { u.value = sat; });
+      const lift = Math.max(0, (sc - 1) / (FOCUS_SCALE - 1));
+      entry.veil.material.opacity = veilNow[i];
       entry.group.scale.setScalar(sc);
-      entry.group.position.set(posNow[i].x, posNow[i].y, (sc - 1) * 0.7);
+      entry.group.position.set(posNow[i].x, posNow[i].y, lift * 0.9);
       entry.group.updateMatrixWorld(true);
-      const fade = 0.14 + 0.66 * sat;
-      entry.line.material.opacity = fade;
-      entry.dotMat.opacity = fade;
-      entry.endMat.opacity = fade;
+      entry.group.traverse((obj) => {
+        if (obj.isMesh && obj !== entry.veil && obj.geometry?.type === 'PlaneGeometry') {
+          obj.renderOrder = lift > 0.04 ? 5 : 1;
+        }
+      });
+      const shown = 1 - veilNow[i] / 0.6;
+      entry.line.material.opacity = 0.12 + 0.58 * shown;
+      entry.dotMat.opacity = 0.12 + 0.68 * shown;
+      entry.endMat.opacity = 0.12 + 0.68 * shown;
       if (entry.dotMesh) entry.dotMesh.getWorldPosition(tmp);
       else tmp.set(entry.center.x, entry.center.y, 0.08);
       const attr = entry.line.geometry.attributes.position;
-      attr.setXYZ(0, tmp.x, tmp.y, 0.1);
-      attr.setXYZ(1, entry.anchor.x, entry.anchor.y, 0.1);
+      attr.setXYZ(0, tmp.x, tmp.y, 0.12);
+      attr.setXYZ(1, entry.anchor.x, entry.anchor.y, 0.12);
       attr.needsUpdate = true;
       entry.line.geometry.computeBoundingSphere();
       const p = entry.anchor.clone().project(camera);
@@ -414,10 +452,10 @@ export async function createDesign(renderer, { reduce, projects }) {
       const shift = entry.side === 'right' ? '0, -50%' : '-100%, -50%';
       entry.label.style.transform = `translate(${x}px, ${y}px) translate(${shift})`;
       const onScreen = p.z < 1 && x > -220 && x < viewW + 40 && y > -30 && y < viewH + 30;
-      entry.label.style.opacity = onScreen ? String(0.18 + 0.82 * sat) : '0';
+      entry.label.style.opacity = onScreen ? String(Math.max(0, shown)) : '0';
     });
     swatches.forEach((mesh) => {
-      mesh.material.color.copy(mesh.userData.base).lerp(grey, 1 - swatchNow);
+      mesh.material.color.copy(mesh.userData.base).lerp(wash, (1 - swatchNow) * 0.6);
     });
   }
 
@@ -425,13 +463,13 @@ export async function createDesign(renderer, { reduce, projects }) {
     slot = next;
     const focus = slot === 0 ? -1 : slot - 1;
     entries.forEach((_, i) => {
-      satTo[i] = focus === -1 || i === focus ? 1 : 0;
+      veilTo[i] = focus === -1 || i === focus ? 0 : 0.6;
       scaleTo[i] = i === focus ? FOCUS_SCALE : 1;
       placeTarget(i, focus);
     });
     swatchTo = focus === -1 ? 1 : 0;
     if (snap || reduce) {
-      satTo.forEach((v, i) => { satNow[i] = satFrom[i] = v; });
+      veilTo.forEach((v, i) => { veilNow[i] = veilFrom[i] = v; });
       scaleTo.forEach((v, i) => { scaleNow[i] = scaleFrom[i] = v; });
       posTo.forEach((v, i) => { posNow[i].copy(v); posFrom[i].copy(v); });
       swatchNow = swatchFrom = swatchTo;
@@ -439,7 +477,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       applyVisual();
       return;
     }
-    satNow.forEach((v, i) => { satFrom[i] = v; });
+    veilNow.forEach((v, i) => { veilFrom[i] = v; });
     scaleNow.forEach((v, i) => { scaleFrom[i] = v; });
     posNow.forEach((v, i) => { posFrom[i].copy(v); });
     swatchFrom = swatchNow;
@@ -461,7 +499,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (animating && !reduce) {
       const t = Math.min(1, ((now || performance.now()) - animStart) / animMs);
       const e = easeGlide(t, easeIn);
-      satFrom.forEach((v, i) => { satNow[i] = v + (satTo[i] - v) * e; });
+      veilFrom.forEach((v, i) => { veilNow[i] = v + (veilTo[i] - v) * e; });
       scaleFrom.forEach((v, i) => { scaleNow[i] = v + (scaleTo[i] - v) * e; });
       posFrom.forEach((v, i) => posNow[i].lerpVectors(v, posTo[i], e));
       swatchNow = swatchFrom + (swatchTo - swatchFrom) * e;

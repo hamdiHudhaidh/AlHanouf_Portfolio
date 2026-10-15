@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes. About is a still editorial layout. Graphic Design is a moodboard: every published image from her projects, arranged together on one sheet. Ceramics is a potter’s wheel. Exhibition is a gallery wall. Her published site has graphic-design projects only. Ceramics and Exhibition currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
+The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is a moodboard: every published image from her projects, scattered together on one sheet. Ceramics is a potter’s wheel. Art is a gallery wall. Her published site has graphic-design projects only. Ceramics and Art currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -12,16 +12,22 @@ The page has four scenes. About is a still editorial layout. Graphic Design is a
 
 | Scene | Hash | What you see |
 | --- | --- | --- |
-| About | `#about` | Placeholder portrait, her welcome line, links |
+| About | `#about` | Placeholder portrait, her welcome line, LinkedIn and WhatsApp |
 | Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
-| Graphic Design | `#design` | A moodboard. The camera stays on the sheet. 00 is the whole board; each later number lifts one project |
-| Exhibition | `#exhibition` | Gallery wall. Three sample paintings and one sample sculpture, each with a museum label |
+| Design | `#design` | A moodboard. The camera stays on the sheet. 00 is the whole board; each later number lifts one project |
+| Art | `#art` | Gallery wall. 00 is the whole room. Three sample paintings and one sample sculpture, each with a museum label in the room |
 
-The scene links sit at the bottom right: About, Ceramics, Graphic Design, Exhibition. The active one carries a clay dot. On a narrow screen they fold into a button with the current scene’s name.
+`#exhibition` opens Art and the address bar becomes `#art`.
 
-The counter and arrows sit at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item. On the moodboard, 00 is the whole sheet and the camera does not move. 01 and onward are her projects, in the order they appear in `DESIGN`. The chosen cluster scales up a little and shifts to leave room, the other prints fade to grey, and her words plus the project’s other photos ease in beside it. Another press while that is still moving retargets from the current sizes. 00 eases the sheet back to full colour. Exhibition is different: there the camera glides in one shot from work to work, and a press during that glide retargets it. About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Exhibition if that list is emptied.
+The current page name sits at the top left. The previous page name sits at the bottom left, and the next page name at the bottom right. Art’s next page is About, and About’s previous page is Art. The counter and arrows stay at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item.
 
-If the browser asks for reduced motion, the moodboard cuts to the scaled work instead of animating, the gallery cuts instead of gliding, the wheel cuts, and the grain overlay holds still.
+On the moodboard, 00 is the whole sheet and the camera does not move. The prints are scattered: each one is rotated a little and overlaps its neighbours. 01 and onward are her projects, in the order they appear in `DESIGN`. The chosen cluster grows and shifts to leave room. The other projects sit under a white veil at 60% opacity. Her words and that project’s other photos are written on the page, over the veiled work, not in a side panel. Another press while that is still moving retargets from the current sizes. 00 eases the sheet back.
+
+Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. The description is a museum label in the 3D room: beside the piece on a wide screen, and below it on a tall one.
+
+About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Art if that list is emptied.
+
+If the browser asks for reduced motion, the moodboard cuts to the enlarged work instead of animating, the gallery cuts instead of gliding, the wheel cuts, and the grain overlay holds still.
 
 ## Folder structure
 
@@ -31,7 +37,7 @@ css/style.css
 js/main.js            scenes, hash routing, arrows
 js/ceramics.js        potter’s wheel
 js/design.js          moodboard, leader labels, focus animation
-js/exhibition.js      gallery wall and labels
+js/exhibition.js      Art gallery, camera glide, museum labels
 js/clay.js            clay shapes for the wheel
 js/projects.js        all editable text and image lists
 js/vendor/            three.js r169, vendored
@@ -47,9 +53,9 @@ Paths are relative, so the site works from a local server or under `/AlHanouf_Po
 
 Everything you would change is in `js/projects.js`.
 
-**About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
+**About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The page shows LinkedIn and WhatsApp only. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-**Graphic design.** Each object in `DESIGN` is one work on the moodboard. Every file in `images` is placed on the sheet. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project. The side panel prints only the fields that are present, plus the project’s other photos.
+**Design.** Each object in `DESIGN` is one work on the moodboard. Every file in `images` is placed on the sheet. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project. Choosing a project writes the fields that are present on the page, plus the project’s other photos, over the veiled board.
 
 **Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
 
@@ -59,13 +65,13 @@ Everything you would change is in `js/projects.js`.
 
 `shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. The photos open through the splatter after the wheel turns.
 
-**Exhibition.** The array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
+**Art.** The `EXHIBITION` array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
 
 ```js
 { kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
 ```
 
-`kind` is `painting` (on the wall) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The museum card prints only the fields that are present.
+`kind` is `painting` (on the wall) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The museum label in the room prints only the fields that are present.
 
 ## Run locally
 
