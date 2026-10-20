@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 
 // Design is one off-white wall with two layers of twine.
-// Two front lines hold every cover. Shorter strings behind each cover,
-// closer to the wall, hold the rest of that project. Both layers hang all
-// the time. 00 is a straight, distant view, so each cover hides its own
-// content. An arrow orbits closer and to the side; the depth between the
-// layers lets that content show beside the cover. While a project is in
-// frame, its cover and the pieces behind it turn to face the camera.
+// Two front lines hold every cover. Each project has one back line, the
+// same jute, hung just behind its cover, with that project's pieces pegged
+// side by side. At 00 the cover hides them. Choosing a project eases that
+// back line closer and larger, into the open side of the frame, and turns
+// the cover and those pieces to face the camera. Moving between projects
+// fades the pieces while they turn.
 
 const WALL_HALF = 4.15;
 const SAG = 0.16;
@@ -18,7 +18,9 @@ const COL_PITCH = 1.52;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const FRONT_Z = 2.05;
-const DEPTH = 1.68;
+const REST_DEPTH = 0.46;
+const FOCUS_Z = 0.2;
+const FADE_MS = 420;
 const ORBIT = 2.15;
 const FOCUS_DIST = 2.2;
 
@@ -287,7 +289,7 @@ function layoutPieces(items, seed, note, limits = {}) {
   for (let i = 0; i < units.length; i += 1) {
     const parent = units[i];
     const next = units[i + 1];
-    const chain = Boolean(next)
+    const chain = !limits.row && Boolean(next)
       && parent.style !== 'page'
       && next.style !== 'page'
       && next.style !== 'collage'
@@ -939,33 +941,39 @@ export async function createDesign(renderer, { reduce, projects }) {
   const visits = [];
   const videos = [];
 
-  function addShortString(parent, y, half) {
+  function addBackString(parent, y, half) {
+    const sagAmp = Math.min(0.16, Math.max(0.05, half * 0.055));
+    const sagAtX = (x) => {
+      const u = x / Math.max(half, 0.01);
+      return -sagAmp * (1 - u * u);
+    };
     const pts = [];
-    const steps = 18;
+    const steps = 32;
     for (let i = 0; i <= steps; i += 1) {
       const x = -half + (i / steps) * half * 2;
-      const sag = -0.055 * (1 - (x / half) * (x / half));
-      pts.push(new THREE.Vector3(x, y + sag, 0));
+      pts.push(new THREE.Vector3(x, y + sagAtX(x), 0));
     }
     const mesh = new THREE.Mesh(
-      fibreTube(new THREE.CatmullRomCurve3(pts), 28, 0.015, 7),
+      fibreTube(new THREE.CatmullRomCurve3(pts), 56, 0.024, 8),
       twineMat,
     );
     mesh.castShadow = true;
     parent.add(mesh);
     [-half, half].forEach((x) => {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.007, 6, 14), metalMat);
+      const hook = new THREE.Group();
+      const ring = new THREE.Mesh(eyeGeo, metalMat);
       ring.rotation.y = Math.PI / 2;
       ring.castShadow = true;
-      ring.position.set(x, y, 0.004);
-      parent.add(ring);
-      addKnot(parent, x, y, 0.01);
+      const screw = new THREE.Mesh(screwGeo, metalMat);
+      screw.rotation.x = Math.PI / 2;
+      screw.position.z = -0.02;
+      screw.castShadow = true;
+      hook.add(ring, screw);
+      hook.position.set(x, y + sagAtX(x), 0);
+      parent.add(hook);
+      addKnot(parent, x, hook.position.y, 0.012);
     });
-  }
-
-  function shortSag(x, half) {
-    const u = x / Math.max(half, 0.01);
-    return -0.055 * (1 - u * u);
+    return sagAtX;
   }
 
     prepared.forEach((entry, index) => {
@@ -1139,21 +1147,15 @@ export async function createDesign(renderer, { reduce, projects }) {
       return topY - span;
     }
 
-    function hangColumn(parent, col, stringY, half) {
+    function hangPeg(parent, x, sag, drop, tilt, sway) {
       const pivot = new THREE.Group();
-      pivot.position.set(col.x, stringY + shortSag(col.x, half), 0.012);
-      pivot.rotation.z = col.tilt || 0;
-      addSHook(pivot, 0.01);
-      addDrop(pivot, -0.03, col.drop, col.sway);
-      let low = hang(pivot, col.parent, -(0.03 + col.drop));
-      if (col.child) {
-        addSHook(pivot, low + 0.01);
-        addDrop(pivot, low - 0.02, col.childDrop, col.sway * -0.6);
-        low = hang(pivot, col.child, low - 0.02 - col.childDrop);
-      }
+      pivot.position.set(x, sag, 0.02);
+      pivot.rotation.z = tilt || 0;
+      addPeg(pivot, 0.012);
+      addDrop(pivot, -0.03, drop, sway || 0);
       parent.add(pivot);
       pivots.push(pivot);
-      return pivot.position.y + low;
+      return pivot;
     }
 
     const heroRnd = hash(index + 29);
@@ -1190,103 +1192,120 @@ export async function createDesign(renderer, { reduce, projects }) {
     const backGroup = new THREE.Group();
     lineGroup.add(backGroup);
 
-    const maskW = Math.max(0.72, matW * 0.9);
-    const maskH = Math.max(0.74, matH * 0.9);
     const laid = layoutPieces(
       entry.content,
       index * 19 + 4,
       entry.project.text || '',
-      { maxW: maskW, colMax: maskH, tag: true },
+      { maxW: 3.6, colMax: 1.35, tag: true, row: true },
     );
-    const half = Math.max(0.34, Math.min(maskW / 2, laid.row / 2 + 0.08));
-    const stringY = 0;
-    let cMinX = half;
-    let cMaxX = -half;
-    let cMinY = 0.2;
-    let cMaxY = -0.2;
-    const noteBound = (x0, x1, y0, y1) => {
-      cMinX = Math.min(cMinX, x0, x1);
-      cMaxX = Math.max(cMaxX, x0, x1);
-      cMinY = Math.min(cMinY, y0, y1);
-      cMaxY = Math.max(cMaxY, y0, y1);
-    };
-    if (laid.columns.length || laid.tagH) {
-      addShortString(backGroup, stringY, half);
-      noteBound(-half, half, stringY - 0.06, stringY + 0.02);
-      laid.columns.forEach((col) => {
-        const low = hangColumn(backGroup, col, stringY, half);
-        noteBound(col.x - col.w / 2, col.x + col.w / 2, low, stringY);
-      });
-      if (laid.tagH) {
-        const pivot = new THREE.Group();
-        pivot.position.set(laid.tagX, stringY + shortSag(laid.tagX, half), 0.02);
-        pivot.rotation.z = laid.tagTilt || 0;
-        addSHook(pivot, 0.01);
-        addDrop(pivot, -0.03, laid.tagDrop, 0.01);
-        const tag = new THREE.Mesh(
-          bentPlane(laid.tagW, laid.tagH, 0.006),
-          new THREE.MeshStandardMaterial({
-            map: tagTexture(entry.project, renderer),
-            transparent: true,
-            opacity: 0.86,
-            alphaTest: 0.12,
-            roughness: 0.72,
-            metalness: 0,
-            envMapIntensity: 0.08,
-            shadowSide: THREE.DoubleSide,
-          }),
+    const pegGap = 0.16;
+    const pegPieces = laid.columns.map((col) => col.parent);
+    let rowW = 0;
+    pegPieces.forEach((piece, i) => {
+      rowW += piece.w + (i ? pegGap : 0);
+    });
+    if (laid.tagH) rowW += (pegPieces.length ? pegGap : 0) + laid.tagW;
+    const half = Math.max(0.55, rowW / 2 + 0.28);
+    const sagAtX = (laid.columns.length || laid.tagH) ? addBackString(backGroup, 0, half) : () => 0;
+    const pegRnd = hash(index * 19 + 4);
+    let cursorX = -rowW / 2;
+    pegPieces.forEach((piece) => {
+      const x = cursorX + piece.w / 2;
+      cursorX += piece.w + pegGap;
+      const drop = 0.07 + pegRnd() * 0.06;
+      const pivot = hangPeg(
+        backGroup,
+        x,
+        sagAtX(x),
+        drop,
+        (pegRnd() - 0.5) * 0.05,
+        (pegRnd() - 0.5) * 0.012,
+      );
+      hang(pivot, piece, -(0.03 + drop));
+    });
+    if (laid.tagH) {
+      const x = pegPieces.length ? cursorX + laid.tagW / 2 : 0;
+      const drop = 0.07 + pegRnd() * 0.05;
+      const pivot = hangPeg(backGroup, x, sagAtX(x), drop, (pegRnd() - 0.5) * 0.04, 0.008);
+      const tag = new THREE.Mesh(
+        bentPlane(laid.tagW, laid.tagH, 0.006),
+        new THREE.MeshStandardMaterial({
+          map: tagTexture(entry.project, renderer),
+          transparent: true,
+          opacity: 0.86,
+          alphaTest: 0.12,
+          roughness: 0.72,
+          metalness: 0,
+          envMapIntensity: 0.08,
+          shadowSide: THREE.DoubleSide,
+        }),
+      );
+      tag.castShadow = true;
+      tag.userData.billboard = true;
+      tag.position.y = -(0.03 + drop + laid.tagH / 2);
+      pivot.add(tag);
+      const href = entry.project.links?.[0]?.href;
+      if (href) {
+        const visitH = 0.16;
+        const visitDrop = 0.035;
+        const visitTop = tag.position.y - laid.tagH / 2;
+        addDrop(pivot, visitTop - 0.008, visitDrop, -0.004);
+        const visit = new THREE.Mesh(
+          bentPlane(Math.min(0.42, laid.tagW), visitH, 0.004),
+          photoMat(visitMap, { roughness: 0.9, envMapIntensity: 0.08 }),
         );
-        tag.castShadow = true;
-        tag.userData.billboard = true;
-        tag.position.y = -(0.03 + laid.tagDrop + laid.tagH / 2);
-        pivot.add(tag);
-        pivots.push(pivot);
-        backGroup.add(pivot);
-        let low = pivot.position.y + tag.position.y - laid.tagH / 2;
-        const href = entry.project.links?.[0]?.href;
-        if (href) {
-          const visitH = 0.16;
-          const visitDrop = 0.04;
-          const visitTop = tag.position.y - laid.tagH / 2;
-          addSHook(pivot, visitTop + 0.008);
-          addDrop(pivot, visitTop - 0.01, visitDrop, -0.006);
-          const visit = new THREE.Mesh(
-            bentPlane(Math.min(0.42, laid.tagW), visitH, 0.004),
-            photoMat(visitMap, { roughness: 0.9, envMapIntensity: 0.08 }),
-          );
-          visit.position.y = visitTop - 0.01 - visitDrop - visitH / 2;
-          visit.castShadow = true;
-          visit.userData.billboard = true;
-          visit.userData.href = href;
-          pivot.add(visit);
-          visits.push(visit);
-          low = Math.min(low, pivot.position.y + visit.position.y - visitH / 2);
-        }
-        noteBound(laid.tagX - laid.tagW / 2, laid.tagX + laid.tagW / 2, low, pivot.position.y);
+        visit.position.y = visitTop - 0.008 - visitDrop - visitH / 2;
+        visit.castShadow = true;
+        visit.userData.billboard = true;
+        visit.userData.href = href;
+        pivot.add(visit);
+        visits.push(visit);
       }
     }
-    const contentW = Math.max(0.2, cMaxX - cMinX);
-    const contentH = Math.max(0.2, cMaxY - cMinY);
-    const contentCx = (cMinX + cMaxX) / 2;
-    const contentCy = (cMinY + cMaxY) / 2;
-    const fit = Math.min(
-      1.7,
-      (matW * 0.82) / contentW,
-      (matH * 0.86) / contentH,
-    );
-    backGroup.scale.setScalar(fit);
-    const reveal = home.x >= 0 ? 0.06 : -0.06;
-    backGroup.position.set(-contentCx * fit + reveal, coverY - contentCy * fit, -DEPTH);
+    backGroup.updateWorldMatrix(true, true);
+    const backBox = new THREE.Box3().setFromObject(backGroup);
+    const contentCx = (backBox.min.x + backBox.max.x) / 2;
+    const contentCy = (backBox.min.y + backBox.max.y) / 2;
+    const contentW = Math.max(0.2, backBox.max.x - backBox.min.x);
+    const contentH = Math.max(0.2, backBox.max.y - backBox.min.y);
+    const faceBox = new THREE.Box3();
+    let faceAny = false;
     backGroup.traverse((obj) => {
-      if (obj.isMesh) obj.castShadow = false;
+      if (!obj.userData || !obj.userData.billboard) return;
+      faceBox.expandByObject(obj);
+      faceAny = true;
     });
+    const faceCx = faceAny ? (faceBox.min.x + faceBox.max.x) / 2 : contentCx;
+    const faceCy = faceAny ? (faceBox.min.y + faceBox.max.y) / 2 : contentCy;
+    const faceW = faceAny ? Math.max(0.2, faceBox.max.x - faceBox.min.x) : contentW;
+    const faceH = faceAny ? Math.max(0.2, faceBox.max.y - faceBox.min.y) : contentH;
+    const restScale = Math.min((matW * 0.72) / contentW, (matH * 0.78) / contentH);
+    const restCenter = new THREE.Vector3(0, coverY, -REST_DEPTH);
+    backGroup.scale.setScalar(restScale);
+    backGroup.position.set(
+      restCenter.x - contentCx * restScale,
+      restCenter.y - contentCy * restScale,
+      restCenter.z,
+    );
 
     lineGroup.position.copy(home);
     scene.add(lineGroup);
 
     const faces = [];
+    const materials = [];
     lineGroup.traverse((obj) => {
       if (obj.userData && obj.userData.billboard) faces.push(obj);
+      if (!obj.isMesh || !obj.material) return;
+      const list = Array.isArray(obj.material) ? obj.material : [obj.material];
+      const cloned = list.map((mat) => {
+        const copy = mat.clone();
+        copy.userData.baseOpacity = mat.opacity == null ? 1 : mat.opacity;
+        copy.transparent = true;
+        copy.opacity = copy.userData.baseOpacity;
+        return copy;
+      });
+      obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+      cloned.forEach((mat) => materials.push(mat));
     });
 
     lines.push({
@@ -1296,6 +1315,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       backGroup,
       pivots,
       faces,
+      materials,
       videos: lineVideos,
       scroll: cluster.userData.scroll || null,
       home,
@@ -1305,6 +1325,18 @@ export async function createDesign(renderer, { reduce, projects }) {
       heroTop,
       matW,
       matH,
+      contentCx,
+      contentCy,
+      faceCx,
+      faceCy,
+      faceW,
+      faceH,
+      restCenter,
+      restScale,
+      focusCenter: restCenter.clone(),
+      focusScale: restScale,
+      backCenter: restCenter.clone(),
+      backScale: restScale,
     });
   });
 
@@ -1318,6 +1350,8 @@ export async function createDesign(renderer, { reduce, projects }) {
   let fovFrom = 22;
   let fovTo = 22;
   let lastFaceNow = 0;
+  let fadeFrom = -1;
+  let fadeStart = 0;
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const facePoint = new THREE.Vector3();
@@ -1339,15 +1373,41 @@ export async function createDesign(renderer, { reduce, projects }) {
     line.group.updateMatrixWorld(true);
   }
 
-  function contentBounds(line) {
-    const box = new THREE.Box3();
-    let any = false;
-    line.faces.forEach((obj) => {
-      if (obj === line.coverSheet) return;
-      box.expandByObject(obj);
-      any = true;
+  function placeBack(line, center, scale) {
+    line.backGroup.position.set(
+      center.x - line.contentCx * scale,
+      center.y - line.contentCy * scale,
+      center.z,
+    );
+    line.backGroup.scale.setScalar(scale);
+    line.backGroup.updateMatrixWorld(true);
+  }
+
+  function fadeEase(time) {
+    if (reduce) return 1;
+    const u = Math.min(1, Math.max(0, (time - fadeStart) / FADE_MS));
+    return u < 0.5 ? 2 * u * u : 1 - ((-2 * u + 2) ** 2) / 2;
+  }
+
+  function opacityFor(index, time) {
+    const focus = slot - 1;
+    const eased = fadeEase(time);
+    if (reduce || eased >= 1) return focus < 0 || index === focus ? 1 : 0;
+    if (fadeFrom < 0 && focus >= 0) return index === focus ? 1 : 1 - eased;
+    if (focus < 0) return index === fadeFrom ? 1 : eased;
+    if (index === focus) return eased;
+    if (index === fadeFrom) return 1 - eased;
+    return 0;
+  }
+
+  function applyOpacity(index, amount) {
+    const line = lines[index];
+    const shown = amount > 0.015;
+    line.group.visible = shown;
+    if (!shown) return;
+    line.materials.forEach((mat) => {
+      mat.opacity = mat.userData.baseOpacity * amount;
     });
-    return any ? box : null;
   }
 
   function fitPose(minX, maxX, minY, maxY, lookZ, fill, oblique) {
@@ -1388,9 +1448,6 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   const probeCam = camera.clone();
   const probeCorner = new THREE.Vector3();
-  const frameX = 0.92;
-  const frameY0 = -0.78;
-  const frameY1 = 0.8;
 
   function projectRoot(root, cam) {
     let x0 = Infinity;
@@ -1439,94 +1496,117 @@ export async function createDesign(renderer, { reduce, projects }) {
     return any ? { x0, x1, y0, y1 } : null;
   }
 
-  function inFrame(rect) {
-    return rect.x0 >= -frameX && rect.x1 <= frameX && rect.y0 >= frameY0 && rect.y1 <= frameY1;
-  }
-
-  function sideGap(a, b) {
-    if (a.x1 <= b.x0) return b.x0 - a.x1;
-    if (b.x1 <= a.x0) return a.x0 - b.x1;
-    return -(Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
-  }
-
-  function rectGap(a, b) {
-    const gx = a.x1 <= b.x0 ? b.x0 - a.x1 : b.x1 <= a.x0 ? a.x0 - b.x1 : -(Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
-    const gy = a.y1 <= b.y0 ? b.y0 - a.y1 : b.y1 <= a.y0 ? a.y0 - b.y1 : -(Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
-    if (gx < 0 && gy < 0) return Math.max(gx, gy);
-    if (gx >= 0 && gy >= 0) return Math.hypot(gx, gy);
-    return Math.max(gx, gy);
-  }
-
   function focusPose(line) {
-    const outward = line.home.x >= 0 ? 1 : -1;
-    lines.forEach((item) => clearFace(item));
-    const coverBox = new THREE.Box3().setFromObject(line.coverSheet);
-    const backBox = contentBounds(line);
-    const spanMin = Math.min(coverBox.min.y, backBox ? backBox.min.y : coverBox.min.y);
-    const spanMax = Math.max(coverBox.max.y, backBox ? backBox.max.y : coverBox.max.y);
-    const midY = (spanMin + spanMax) / 2;
-    const lookZ = backBox ? (coverBox.max.z + backBox.min.z) * 0.5 : coverBox.max.z;
-    let best = null;
-    const fovs = narrow ? [40, 48, 58] : [26, 32, 38];
-    const dists = narrow ? [1.8, 2.5, 3.3] : [1.6, 2.2, 3.0];
-    const orbits = narrow ? [1.6, 3.0, 4.4] : [1.7, 3.2, 4.6];
-    const looks = [0.05, 0.28, 0.55];
-    const lifts = narrow ? [0, 1.1, 2.0] : [0, 0.45];
-    fovs.forEach((fov) => {
-      dists.forEach((dist) => {
-        orbits.forEach((orbit) => {
-          looks.forEach((look) => {
-            lifts.forEach((lift) => {
-              [-1, 1].forEach((sign) => {
-              const camX = line.home.x + sign * orbit;
-              if (Math.abs(camX) > 7.8) return;
-              probeCam.fov = fov;
-              probeCam.aspect = camera.aspect;
-              probeCam.updateProjectionMatrix();
-              probeCam.position.set(camX, midY + lift, FRONT_Z + dist);
-              probeCam.lookAt(line.home.x + sign * look, midY + lift * 0.2, lookZ);
-              probeCam.updateMatrixWorld();
-              faceLine(line, probeCam.position);
-              const cover = projectRoot(line.coverSheet, probeCam);
-              const back = projectFaces(line, probeCam, true);
-              if (!cover || !inFrame(cover) || cover.x1 - cover.x0 < 0.28) return;
-              if (back && (!inFrame(back) || back.x1 - back.x0 < 0.2 || back.y1 - back.y0 < 0.16)) return;
-              const gap = back ? rectGap(cover, back) : 0.08;
-              const backW = back ? back.x1 - back.x0 : 0;
-              const backH = back ? back.y1 - back.y0 : 0;
-              if (back && gap < 0.02) return;
-              const side = back ? sideGap(cover, back) : gap;
-              const readable = back ? Math.min(backW, backH) : 0.4;
-              const score = readable + Math.min(cover.x1 - cover.x0, 0.72) * 0.45
-                + Math.min(gap, 0.16) * 0.5
-                + (side > 0.02 ? 0.08 : 0);
-              if (!best || score > best.score) {
-                best = {
-                  score,
-                  fov,
-                  cam: probeCam.position.clone(),
-                  look: new THREE.Vector3(line.home.x + sign * look, midY + lift * 0.2, lookZ),
-                };
-              }
-              });
-            });
-          });
-        });
-      });
-    });
+    const savedCenter = line.backCenter.clone();
+    const savedScale = line.backScale;
+    const aspect = Math.max(0.35, camera.aspect);
+    const tall = aspect < 0.9;
+    const fov = tall ? 48 : 33;
+    const tanV = Math.tan((fov * Math.PI) / 360);
+    const frameL = -0.97;
+    const frameR = 0.96;
+    const frameB = tall ? -0.8 : -0.72;
+    const frameT = tall ? 0.88 : 0.78;
+    const gap = 0.07;
+    const maxCoverH = (frameT - frameB) * (tall ? 0.7 : 0.88);
+    const maxCoverW = tall ? 0.5 : 0.56;
+    const dist = Math.max(
+      line.matH / (maxCoverH * tanV),
+      line.matW / (maxCoverW * tanV * aspect),
+      2.2,
+    );
+    const halfH = dist * tanV;
+    const halfW = halfH * aspect;
+    const coverNdcW = Math.min(maxCoverW, line.matW / halfW);
+    const coverRight = frameR - 0.02;
+    const coverNdcX = coverRight - coverNdcW / 2;
+    const coverNdcY = (frameT + frameB) / 2;
+    let camX = line.home.x - coverNdcX * halfW;
+    let camY = line.coverY - coverNdcY * halfH;
+    const camZ = FRONT_Z + dist;
+    const focusZ = FOCUS_Z;
+    const backDist = camZ - (FRONT_Z + focusZ);
+    const backHalfW = backDist * tanV * aspect;
+    const backHalfH = backDist * tanV;
+    const slotL = frameL + 0.03;
+    const slotB = frameB + 0.03;
+    const slotT = frameT - 0.03;
+
+    const placeFace = (scale, faceWorldX, faceWorldY) => {
+      line.focusScale = scale;
+      line.focusCenter.set(
+        (faceWorldX - line.home.x) - (line.faceCx - line.contentCx) * scale,
+        (faceWorldY - line.home.y) - (line.faceCy - line.contentCy) * scale,
+        focusZ,
+      );
+    };
+
+    const shoot = () => {
+      placeBack(line, line.focusCenter, line.focusScale);
+      probeCam.fov = fov;
+      probeCam.aspect = aspect;
+      probeCam.up.set(0, 1, 0);
+      probeCam.position.set(camX, camY, camZ);
+      probeCam.lookAt(camX, camY, FRONT_Z);
+      probeCam.updateProjectionMatrix();
+      probeCam.updateMatrixWorld(true);
+      faceLine(line, probeCam.position);
+      return {
+        cover: projectRoot(line.coverSheet, probeCam),
+        back: projectFaces(line, probeCam, true),
+      };
+    };
+
     clearFace(line);
-    if (best) {
-      poseFov = best.fov;
-      camTarget.copy(best.cam);
-      lookTarget.copy(best.look);
-      return;
+    let scale = Math.min(
+      (0.8 * backHalfW) / line.faceW,
+      ((slotT - slotB) * backHalfH) / line.faceH,
+    );
+    scale = Math.max(line.restScale, Math.min(scale, 4));
+    let faceWorldX = camX + ((slotL + (coverNdcX - coverNdcW / 2) - gap) / 2) * backHalfW;
+    let faceWorldY = camY + coverNdcY * backHalfH;
+    placeFace(scale, faceWorldX, faceWorldY);
+
+    let shot = shoot();
+    if (shot.cover) {
+      const mx = (shot.cover.x0 + shot.cover.x1) / 2;
+      const my = (shot.cover.y0 + shot.cover.y1) / 2;
+      camX += (mx - coverNdcX) * halfW;
+      camY += (my - coverNdcY) * halfH;
+      shot = shoot();
     }
-    const orbit = narrow ? 3.8 : 4.2;
-    const dist = narrow ? 2.4 : 2.0;
-    poseFov = narrow ? 56 : 30;
-    const camX = Math.max(-7.8, Math.min(7.8, line.home.x + outward * orbit));
-    camTarget.set(camX, midY + (narrow ? 0.7 : 0.15), FRONT_Z + dist);
-    lookTarget.set(line.home.x + outward * 0.22, midY, lookZ);
+
+    for (let iter = 0; iter < 4; iter += 1) {
+      const coverLeft = shot.cover ? shot.cover.x0 : (coverNdcX - coverNdcW / 2);
+      const slotR = coverLeft - gap;
+      const slotW = Math.max(0.28, slotR - slotL);
+      const slotH = Math.max(0.28, slotT - slotB);
+      const slotCx = (slotL + slotR) / 2;
+      const slotCy = (slotB + slotT) / 2;
+      if (shot.back) {
+        const bw = Math.max(0.04, shot.back.x1 - shot.back.x0);
+        const bh = Math.max(0.04, shot.back.y1 - shot.back.y0);
+        const mx = (shot.back.x0 + shot.back.x1) / 2;
+        const my = (shot.back.y0 + shot.back.y1) / 2;
+        scale *= Math.min(slotW / bw, slotH / bh);
+        scale = Math.max(line.restScale, Math.min(scale, 4));
+        faceWorldX += (slotCx - mx) * backHalfW;
+        faceWorldY += (slotCy - my) * backHalfH;
+      } else {
+        faceWorldX = camX + slotCx * backHalfW;
+        faceWorldY = camY + slotCy * backHalfH;
+      }
+      placeFace(scale, faceWorldX, faceWorldY);
+      shot = shoot();
+    }
+
+    clearFace(line);
+    placeBack(line, savedCenter, savedScale);
+    line.backCenter.copy(savedCenter);
+    line.backScale = savedScale;
+    poseFov = fov;
+    camTarget.set(camX, camY, camZ);
+    lookTarget.set(camX, camY, FRONT_Z);
   }
 
   function paintPoster(screen) {
@@ -1560,6 +1640,8 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   function aim(next, snap) {
     const count = lines.length + 1;
+    fadeFrom = slot - 1;
+    fadeStart = performance.now();
     slot = ((next % count) + count) % count;
     const focus = slot - 1;
     if (focus < 0) overviewPose();
@@ -1582,11 +1664,16 @@ export async function createDesign(renderer, { reduce, projects }) {
       camera.updateMatrixWorld(true);
       lines.forEach((line, i) => {
         const on = i === focus;
-        line.group.visible = focus < 0 || on;
+        const center = on ? line.focusCenter : line.restCenter;
+        const scale = on ? line.focusScale : line.restScale;
+        line.backCenter.copy(center);
+        line.backScale = scale;
+        placeBack(line, center, scale);
         line.pivots.forEach((pivot) => { pivot.rotation.x = 0; });
         line.faces.forEach((obj) => {
           obj.rotation.y = on ? targetYaw(obj, camera.position) : 0;
         });
+        applyOpacity(i, focus < 0 || on ? 1 : 0);
       });
       return;
     }
@@ -1703,8 +1790,20 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookNow.lerpVectors(lookFrom, lookTo, e);
     }
     camera.lookAt(lookNow);
+    const moveStep = reduce ? 1 : (1 - Math.exp(-faceElapsed / 0.16));
     lines.forEach((line, i) => {
       const on = i === focus;
+      const destC = on ? line.focusCenter : line.restCenter;
+      const destS = on ? line.focusScale : line.restScale;
+      if (moveStep >= 1) {
+        line.backCenter.copy(destC);
+        line.backScale = destS;
+      } else {
+        line.backCenter.lerp(destC, moveStep);
+        line.backScale += (destS - line.backScale) * moveStep;
+      }
+      if (line.backCenter.distanceTo(destC) > 0.01 || Math.abs(line.backScale - destS) > 0.01) swinging = true;
+      placeBack(line, line.backCenter, line.backScale);
       line.faces.forEach((obj) => {
         const target = on ? targetYaw(obj, camera.position) : 0;
         if (reduce) {
@@ -1715,10 +1814,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         if (Math.abs(target - obj.rotation.y) > 0.004) swinging = true;
         obj.rotation.y = next;
       });
-    });
-    const settled = !moving || reduce;
-    lines.forEach((line, i) => {
-      line.group.visible = focus < 0 || !settled || i === focus;
+      applyOpacity(i, opacityFor(i, time));
     });
     if (moving || swinging || shadowWarm > 0) {
       renderer.shadowMap.needsUpdate = true;
