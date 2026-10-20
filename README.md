@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is a moodboard: every published image from her projects, scattered together on one sheet. Ceramics is a potter’s wheel. Art is a gallery wall. Her published site has graphic-design projects only. Ceramics and Art currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
+The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is one off-white wall with twine lines. Ceramics is a potter’s wheel. Art is a gallery wall. Her published site has graphic-design projects only. Ceramics and Art currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -14,20 +14,20 @@ The page has four scenes: About, Ceramics, Design, and Art. About is a still edi
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, LinkedIn and WhatsApp |
 | Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
-| Design | `#design` | A moodboard. The camera stays on the sheet. 00 is the whole board; each later number lifts one project |
+| Design | `#design` | One off-white wall. 00 is the covers; each later number zooms into one project |
 | Art | `#art` | Gallery wall. 00 is the whole room. Three sample paintings and one sample sculpture, each with a museum label in the room |
 
 `#exhibition` opens Art and the address bar becomes `#art`.
 
 The current page name sits at the top left. The previous page name sits at the bottom left, and the next page name at the bottom right. Art’s next page is About, and About’s previous page is Art. The counter and arrows stay at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item.
 
-On the moodboard, 00 is the whole sheet and the camera does not move. The prints are scattered: each one is rotated a little and overlaps its neighbours. 01 and onward are her projects, in the order they appear in `DESIGN`. The chosen cluster grows and shifts to leave room. The other projects sit under a white veil at 60% opacity. Her words and that project’s other photos are written on the page, over the veiled work, not in a side panel. Another press while that is still moving retargets from the current sizes. 00 eases the sheet back.
+On the drying line, 00 is the whole wall of covers, seen straight on from further back. About five jute strings run across it in even rows, each with a gentle sag and a screw-eye at either end. Two projects share a row. Each hangs one cover from an S-hook on a short length of twine, and the drops differ, so the row is irregular. Behind each cover, on shorter strings closer to the wall, hangs the rest of that project: the other stills, film strips, the site page, and a tracing-paper tag. Those strings are already there. From 00 the cover hides them. 01 and onward are her projects, in the order they appear in `DESIGN`. The camera orbits closer, to one side, in one continuous move. The gap between the two layers lets that project's content show beside and behind its cover, and the frame holds only that project. 00 moves back to the straight view. Nothing on the strings appears or disappears. A press during the move retargets it from the current pose. The pieces swing gently as the camera arrives. Her year, title, description, and any URL she published are on the tracing-paper tag. Stills are mixed prints: a white-bordered photo, a curled sheet, a small burnt-edge print, a cyanotype card, a kraft folder, or a collage of several of her photos. A project she published as video hangs its extra clips as film strips: they play muted and looped only while that project is in frame, and show a poster frame otherwise. The website project hangs as a tall paper page, a scrolling capture of the URL she published, with a Visit site tag that opens that URL in a new tab. Window light falls across the wall at an angle, with soft shadows behind the pieces.
 
 Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. The description is a museum label in the 3D room: beside the piece on a wide screen, and below it on a tall one.
 
 About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Art if that list is emptied.
 
-If the browser asks for reduced motion, the moodboard cuts to the enlarged work instead of animating, the gallery cuts instead of gliding, the wheel cuts, and the grain overlay holds still.
+If the browser asks for reduced motion, the drying line cuts to the chosen project instead of orbiting, the sheets do not swing, and the website page does not scroll. The gallery cuts instead of gliding, the wheel cuts, and the grain overlay holds still.
 
 ## Folder structure
 
@@ -36,7 +36,7 @@ index.html
 css/style.css
 js/main.js            scenes, hash routing, arrows
 js/ceramics.js        potter’s wheel
-js/design.js          moodboard, leader labels, focus animation
+js/design.js          print studio, drying lines, paper tags
 js/exhibition.js      Art gallery, camera glide, museum labels
 js/clay.js            clay shapes for the wheel
 js/projects.js        all editable text and image lists
@@ -55,7 +55,7 @@ Everything you would change is in `js/projects.js`.
 
 **About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The page shows LinkedIn and WhatsApp only. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-**Design.** Each object in `DESIGN` is one work on the moodboard. Every file in `images` is placed on the sheet. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. `images` is a list of paths under `assets/projects/<slug>/`. `source` is the project page on the original portfolio. `links` is optional, used when she published a URL inside the project. Choosing a project writes the fields that are present on the page, plus the project’s other photos, over the veiled board.
+**Design.** Each object in `DESIGN` is one project on the wall. The first still is the cover on the front string. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. They are drawn on the tracing-paper tag behind that cover, and nowhere else. `images` is a list of stills under `assets/projects/<slug>/`. When `items` is set, those hang on the back strings, after the cover: an `image` is a print with a white border, a `video` is a local mp4 with a poster frame (muted, looping, playing only while that project is selected), and a `website` is a tall page. The website capture is a screenshot of the URL she published (`links`), saved as `assets/projects/website-design/page.webp`. The Visit site tag uses that same URL. `source` is the project page on the original portfolio.
 
 **Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
 
@@ -94,7 +94,7 @@ Then open http://localhost:8000.
 
 ## Browser
 
-The wheel, the moodboard, and the gallery need JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough.
+The wheel, the print studio, and the gallery need JavaScript, ES modules, import maps, and WebGL. A current Chrome, Edge, Firefox, or Safari is enough. Video on the drying line needs a browser that can play a muted mp4.
 
 ## Credits and licences
 

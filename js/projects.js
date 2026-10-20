@@ -5,7 +5,11 @@
 // CERAMICS items: { title, text?, year?, images: [path], shape }
 //   shape 0 = the word hello, 2 = bottle, 3 = open bowl, 4 = tall vase. Use the closest lathe profile.
 // EXHIBITION items: { kind: 'painting' | 'sculpture', title, image?, artist?, year?, medium?, dimensions?, description? }
-// DESIGN items: { slug, title, text?, year?, images: [path], source, links?: [{label, href}] }
+// DESIGN items: { slug, title, text?, year?, images: [path], items?, source, links?: [{label, href}] }
+//   items hang on the drying line when a project is not only stills:
+//   { kind: 'image' | 'video' | 'website', src, poster?, href? }
+//   video files are local copies of the clips on her project page. poster is a frame from that clip.
+//   a website src is a capture of the URL she published, hung as a scrolling page.
 
 export const ARTIST = {
   mark: 'Alhanouf Khalid',
@@ -129,6 +133,11 @@ export const DESIGN = [
     title: 'video editing',
     year: '2024',
     images: pics('video-editing', 1),
+    items: [1, 2, 3, 4].map((n) => ({
+      kind: 'video',
+      src: `assets/projects/video-editing/v${n}.mp4`,
+      poster: `assets/projects/video-editing/v${n}.webp`,
+    })),
     source: src('video-editing'),
   },
   {
@@ -150,6 +159,14 @@ export const DESIGN = [
     title: 'Other Designs',
     year: '2024',
     images: pics('social-media-posts', 3),
+    items: [
+      ...pics('social-media-posts', 3).map((path) => ({ kind: 'image', src: path })),
+      {
+        kind: 'video',
+        src: 'assets/projects/social-media-posts/v1.mp4',
+        poster: 'assets/projects/social-media-posts/v1.webp',
+      },
+    ],
     source: src('social-media-posts'),
   },
   {
@@ -158,6 +175,18 @@ export const DESIGN = [
     year: '2024',
     text: 'website for peak company',
     images: pics('website-design', 1),
+    items: [
+      {
+        kind: 'website',
+        src: 'assets/projects/website-design/page.webp',
+        href: 'http://peak.sa.com/index-ar.html',
+      },
+      {
+        kind: 'video',
+        src: 'assets/projects/website-design/v1.mp4',
+        poster: 'assets/projects/website-design/v1.webp',
+      },
+    ],
     source: src('website-design'),
     links: [{ label: 'http://peak.sa.com/index-ar.html', href: 'http://peak.sa.com/index-ar.html' }],
   },
