@@ -153,43 +153,12 @@ function showCards(p) {
   })));
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
-function showDesign(project) {
-  if (current !== 'design') {
-    designLabel.hidden = true;
-    designLabel.innerHTML = '';
-    designLabel.classList.remove('in');
-    return;
-  }
-  if (!project) {
-    designLabel.classList.remove('in');
-    return;
-  }
-  const bits = [];
-  if (project.year) bits.push(`<p class="who">${esc(project.year)}</p>`);
-  if (project.title) bits.push(`<h2>${esc(project.title)}</h2>`);
-  if (project.text) bits.push(`<p>${esc(project.text)}</p>`);
-  if (project.links?.length) {
-    bits.push(`<p class="facts">${project.links.map((l) => `<a href="${esc(l.href)}" rel="noopener">${esc(l.label)}</a>`).join('<br>')}</p>`);
-  }
-  const more = (project.images || []).slice(1);
-  if (more.length) {
-    bits.push(`<div class="board-photos">${more.map((src) => `<img src="${esc(src)}" alt="${esc(project.title || '')}">`).join('')}</div>`);
-  }
-  designLabel.innerHTML = bits.join('');
-  const wasHidden = designLabel.hidden;
-  designLabel.hidden = bits.length === 0;
-  if (designLabel.hidden) return;
-  if (reduce || (!wasHidden && designLabel.classList.contains('in'))) {
-    designLabel.classList.add('in');
-    return;
-  }
+function showDesign() {
+  // The drying line writes her words on a paper tag in the room.
+  designLabel.hidden = true;
+  designLabel.innerHTML = '';
   designLabel.classList.remove('in');
-  void designLabel.offsetWidth;
-  designLabel.classList.add('in');
+  boardLabels.hidden = true;
 }
 
 function renderAbout() {
@@ -268,8 +237,8 @@ function applyChrome() {
     if (info.hiding) hideCards();
     else showCards(info.project);
   }
-  showDesign(current === 'design' ? active?.nav()?.project : null);
-  boardLabels.hidden = current !== 'design';
+  showDesign();
+  boardLabels.hidden = true;
   paintHud();
   paintNav(current);
 }
@@ -277,6 +246,7 @@ function applyChrome() {
 async function go(id) {
   if (!SCENES.some((s) => s.id === id)) id = 'about';
   if (id === current) return;
+  if (current === 'design' && id !== 'design') view.design?.pause?.();
   veil.classList.add('on');
   await new Promise((r) => setTimeout(r, reduce ? 20 : 320));
   active = await ensure(id);
@@ -425,7 +395,7 @@ function frame(now) {
         if (info?.hiding) hideCards();
         else showCards(info?.project);
       }
-      if (current === 'design') showDesign(info?.project);
+      if (current === 'design') showDesign();
       paintHud();
     }
   }
