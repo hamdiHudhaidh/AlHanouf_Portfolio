@@ -15,7 +15,7 @@ const TOP_Y = 6.85;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const FRONT_Z = 2.05;
-const DEPTH = 1.72;
+const DEPTH = 1.15;
 const ORBIT = 2.15;
 const FOCUS_DIST = 2.2;
 
@@ -449,10 +449,10 @@ function windowCookie() {
   canvas.width = 512;
   canvas.height = 512;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#fff6e8';
+  g.fillStyle = '#fff8f2';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = '#1c1814';
-  g.lineWidth = 26;
+  g.strokeStyle = 'rgba(42, 34, 28, 0.78)';
+  g.lineWidth = 40;
   g.lineCap = 'butt';
   for (let x = 64; x < 512; x += 128) {
     g.beginPath();
@@ -482,7 +482,7 @@ function noiseCanvas(size, paint) {
 
 function plasterTextures(renderer) {
   const color = noiseCanvas(512, (g, s) => {
-    g.fillStyle = '#f4eee6';
+    g.fillStyle = '#ece7df';
     g.fillRect(0, 0, s, s);
     for (let i = 0; i < 2800; i += 1) {
       const v = 210 + Math.random() * 40;
@@ -548,11 +548,11 @@ function plasterTextures(renderer) {
 
 function juteTextures(renderer) {
   const canvas = noiseCanvas(256, (g, s) => {
-    g.fillStyle = '#c49658';
+    g.fillStyle = '#cbb892';
     g.fillRect(0, 0, s, s);
     g.lineWidth = 2;
     for (let x = -s; x < s * 2; x += 6) {
-      g.strokeStyle = x % 12 === 0 ? '#8d6232' : 'rgba(255, 228, 196, 0.28)';
+      g.strokeStyle = x % 12 === 0 ? '#a89068' : 'rgba(255, 244, 228, 0.35)';
       g.beginPath();
       g.moveTo(x, 0);
       g.lineTo(x + 36, s);
@@ -616,7 +616,7 @@ function fibreTube(curve, segments, radius, radial = 6) {
   for (let i = 0; i < pos.count; i += 1) {
     const along = uv.getX(i);
     const around = uv.getY(i) * Math.PI * 2;
-    const ridge = radius * 0.34 * (0.35 + Math.sin(around * 3.0 + along * 70.0));
+    const ridge = radius * 0.16 * Math.sin(around * 3.0 + along * 48.0);
     pos.setXYZ(
       i,
       pos.getX(i) + nrm.getX(i) * ridge,
@@ -695,10 +695,10 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf3eee6);
+  scene.background = new THREE.Color(0xece7df);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.34;
+  scene.environmentIntensity = 0.16;
   pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.08, 80);
@@ -725,11 +725,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     return w * h < 1100 * 800 ? 1024 : 2048;
   }
 
-  scene.add(new THREE.HemisphereLight(0xfff6ea, 0xe4d5c2, 0.62));
-  scene.add(new THREE.AmbientLight(0xfff3e8, 0.1));
-  const sun = new THREE.DirectionalLight(0xffe2b8, 3.15);
-  sun.position.set(-18, 9.2, 7.4);
-  sun.target.position.set(1.4, 2.4, 0);
+  scene.add(new THREE.HemisphereLight(0xf7f4ef, 0xe9e2d8, 1.25));
+  scene.add(new THREE.AmbientLight(0xf6f1ea, 0.42));
+  const sun = new THREE.DirectionalLight(0xfff6f0, 0.85);
+  sun.position.set(-11, 12, 16);
+  sun.target.position.set(0.6, 2.8, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(shadowSize(), shadowSize());
   sun.shadow.camera.left = -12;
@@ -743,16 +743,18 @@ export async function createDesign(renderer, { reduce, projects }) {
   sun.shadow.radius = 8;
   scene.add(sun, sun.target);
 
-  const windowLight = new THREE.SpotLight(0xfff3dc, 78, 52, 0.86, 0.32, 1);
-  windowLight.position.set(-9.5, 13.2, 10.5);
-  windowLight.target.position.set(0.2, 3.4, 0);
+  const windowLight = new THREE.SpotLight(0xfff6f0, 55, 50, 0.92, 0.48, 1);
+  windowLight.position.set(-7.5, 10.5, 9.2);
+  windowLight.target.position.set(1.4, 2.6, 0);
   windowLight.map = windowCookie();
   windowLight.castShadow = false;
   scene.add(windowLight, windowLight.target);
 
   const plaster = plasterTextures(renderer);
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0xf4eee6,
+    color: 0xffffff,
+    emissive: 0xe5dfd6,
+    emissiveIntensity: 0.22,
     map: plaster.colorTex,
     roughnessMap: plaster.roughTex,
     normalMap: plaster.normalTex,
@@ -768,11 +770,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     envMapIntensity: 0.7,
   });
   const twineMat = new THREE.MeshStandardMaterial({
-    color: 0xd0a56a,
+    color: 0xffffff,
     map: juteTextures(renderer),
-    roughness: 0.92,
+    roughness: 1,
     metalness: 0,
-    envMapIntensity: 0.12,
+    envMapIntensity: 0,
   });
   const woodMat = new THREE.MeshStandardMaterial({
     color: 0xd2ae74,
@@ -800,10 +802,12 @@ export async function createDesign(renderer, { reduce, projects }) {
   });
   const paperMat = new THREE.MeshStandardMaterial({
     color: 0xfffdf8,
-    roughness: 0.91,
+    roughness: 0.92,
     metalness: 0,
+    emissive: 0xf3eee6,
+    emissiveIntensity: 0.12,
     shadowSide: THREE.DoubleSide,
-    envMapIntensity: 0.1,
+    envMapIntensity: 0.06,
   });
   const filmMat = new THREE.MeshStandardMaterial({
     color: 0x1a1816,
@@ -841,9 +845,9 @@ export async function createDesign(renderer, { reduce, projects }) {
     new THREE.Vector3(0.004, -0.04, 0),
   ]);
   const hookGeo = new THREE.TubeGeometry(hookShape, 16, 0.006, 6, false);
-  const pegHalfGeo = new THREE.BoxGeometry(0.02, 0.17, 0.014);
-  const pegSpringGeo = new THREE.TorusGeometry(0.016, 0.0034, 6, 12);
-  const knotGeo = new THREE.TorusGeometry(0.036, 0.009, 6, 12);
+  const pegHalfGeo = new THREE.BoxGeometry(0.016, 0.12, 0.011);
+  const pegSpringGeo = new THREE.TorusGeometry(0.012, 0.0026, 6, 12);
+  const knotGeo = new THREE.TorusGeometry(0.02, 0.0045, 5, 10);
   const eyeGeo = new THREE.TorusGeometry(0.072, 0.011, 8, 18);
   const screwGeo = new THREE.CylinderGeometry(0.009, 0.006, 0.05, 6);
 
@@ -881,7 +885,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       pts.push(new THREE.Vector3(Math.sin(t * Math.PI) * sway, y0 - t * length, 0.008));
     }
     const mesh = new THREE.Mesh(
-      fibreTube(new THREE.CatmullRomCurve3(pts), 8, 0.007, 6),
+      fibreTube(new THREE.CatmullRomCurve3(pts), 8, 0.0042, 5),
       twineMat,
     );
     mesh.castShadow = true;
@@ -905,7 +909,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       pts.push(new THREE.Vector3(x, sagAt(x), 0));
     }
     const curve = new THREE.CatmullRomCurve3(pts);
-    const twine = new THREE.Mesh(fibreTube(curve, 80, 0.02, 7), twineMat);
+    const twine = new THREE.Mesh(fibreTube(curve, 80, 0.008, 6), twineMat);
     twine.castShadow = true;
     twine.position.set(0, rowY, FRONT_Z);
     scene.add(twine);
@@ -941,7 +945,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       pts.push(new THREE.Vector3(x, y + sag, 0));
     }
     const mesh = new THREE.Mesh(
-      fibreTube(new THREE.CatmullRomCurve3(pts), 28, 0.011, 6),
+      fibreTube(new THREE.CatmullRomCurve3(pts), 28, 0.0055, 5),
       twineMat,
     );
     mesh.castShadow = true;
@@ -1117,7 +1121,7 @@ export async function createDesign(renderer, { reduce, projects }) {
           piece.photoH,
           photoMat(makeTexture(piece.image, renderer)),
         );
-        pic.position.set(0, piece.h * 0.04, 0.003);
+        pic.position.set(0, 0, 0.004);
         sheet.add(pic);
       }
     }
@@ -1153,27 +1157,23 @@ export async function createDesign(renderer, { reduce, projects }) {
       return pivot.position.y + low;
     }
 
-    const heroStyles = ['print', 'curl', 'burnt', 'print', 'cyan', 'curl'];
-    const heroStyle = entry.cover ? heroStyles[index % heroStyles.length] : 'print';
     const heroRnd = hash(index + 29);
-    const heroSize = unitSize(heroStyle, entry.cover || { aspect: 1 });
-    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 1.7 : 2.15;
-    const printW = heroSize.w * heroScale;
-    const printH = heroSize.h * heroScale;
-    const matW = Math.max(printW + 0.12, 1.28);
-    const matH = Math.max(printH + 0.14, 1.48);
+    const aspect = Math.max(0.72, Math.min(entry.cover?.aspect || 1, 1.35));
+    const printH = 1.05;
+    const printW = printH * aspect;
+    const margin = 0.065;
     const hero = {
-      style: heroStyle,
+      style: 'print',
       image: entry.cover?.image || null,
       kind: 'image',
       items: entry.cover ? [entry.cover] : [],
       w: printW,
       h: printH,
-      matW,
-      matH,
-      photoW: (heroSize.photoW || heroSize.w * 0.82) * heroScale,
-      photoH: (heroSize.photoH || heroSize.h * 0.78) * heroScale,
+      photoW: printW * (1 - margin * 2),
+      photoH: printH * (1 - margin * 2),
     };
+    const matW = printW;
+    const matH = printH;
     const heroDrop = 0.06 + heroRnd() * 0.2;
     const heroPivot = new THREE.Group();
     heroPivot.position.set(0, sagAt(home.x), 0.02);
@@ -1191,8 +1191,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const backGroup = new THREE.Group();
     lineGroup.add(backGroup);
 
-    const maskW = Math.max(0.46, matW * 0.5);
-    const maskH = Math.max(0.5, matH * 0.5);
+    const maskW = Math.max(0.72, matW * 0.9);
+    const maskH = Math.max(0.74, matH * 0.9);
     const laid = layoutPieces(
       entry.content,
       index * 19 + 4,
@@ -1270,7 +1270,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const contentCy = (cMinY + cMaxY) / 2;
     const fit = Math.min(1.45, (maskW * 0.98) / contentW, (maskH * 0.98) / contentH);
     backGroup.scale.setScalar(fit);
-    backGroup.position.set(-contentCx * fit, coverY - contentCy * fit, -DEPTH);
+    const reveal = home.x >= 0 ? 0.06 : -0.06;
+    backGroup.position.set(-contentCx * fit + reveal, coverY - contentCy * fit, -DEPTH);
     backGroup.traverse((obj) => {
       if (obj.isMesh) obj.castShadow = false;
     });
@@ -1340,7 +1341,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       maxY + (narrow ? 0.2 : 0.3),
       FRONT_Z,
       narrow ? 0.86 : 0.82,
-      narrow ? 0.05 : 0.09,
+      narrow ? 0.035 : 0.05,
     );
   }
 
@@ -1389,7 +1390,8 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function focusPose(line) {
-    const sign = line.home.x >= 0 ? 1 : -1;
+    const outward = line.home.x >= 0 ? 1 : -1;
+    const inward = -outward;
     const packs = lines.map((item) => ({
       cover: new THREE.Box3().setFromObject(item.coverSheet),
       back: item.backGroup.children.length ? new THREE.Box3().setFromObject(item.backGroup) : null,
@@ -1401,41 +1403,47 @@ export async function createDesign(renderer, { reduce, projects }) {
     const midY = (spanMin + spanMax) / 2;
     const lookZ = mine.back ? (mine.cover.max.z + mine.back.min.z) * 0.5 : mine.cover.max.z;
     let best = null;
-    const fovs = narrow ? [34, 38] : [28, 32];
-    const dists = narrow ? [2.2, 2.8, 3.4, 4.2] : [2.6, 3.2, 3.8, 4.6];
-    const orbits = narrow ? [2.2, 2.8, 3.6] : [2.8, 3.6, 4.4];
-    const looks = [0.45, 0.9, 1.45];
+    const fovs = narrow ? [38, 42, 46] : [32, 36, 40];
+    const dists = narrow ? [1.5, 1.9, 2.4] : [1.6, 2.0, 2.4];
+    const orbits = narrow ? [1.8, 2.4, 3.0] : [2.6, 3.2, 3.8];
+    const looks = [0.2, 0.45, 0.75];
     fovs.forEach((fov) => {
       dists.forEach((dist) => {
         orbits.forEach((orbit) => {
           looks.forEach((look) => {
+            const camX = line.home.x + inward * orbit;
+            if (Math.abs(camX) > WALL_HALF - 0.45) return;
             probeCam.fov = fov;
             probeCam.aspect = camera.aspect;
             probeCam.updateProjectionMatrix();
-            probeCam.position.set(line.home.x + sign * orbit, midY, FRONT_Z + dist);
-            probeCam.lookAt(line.home.x + sign * look, midY, lookZ);
+            probeCam.position.set(camX, midY, FRONT_Z + dist);
+            probeCam.lookAt(line.home.x + inward * look, midY, lookZ);
             probeCam.updateMatrixWorld();
             const cover = projectBounds(mine.cover, probeCam);
             const back = mine.back ? projectBounds(mine.back, probeCam) : null;
-            if (!inFrame(cover)) return;
-            if (back && !inFrame(back)) return;
-            const gap = back ? sideGap(cover, back) : 0.2;
-            if (back && gap < 0.045) return;
+            if (!inFrame(cover) || cover.x1 - cover.x0 < 0.26) return;
+            if (back && (!inFrame(back) || back.x1 - back.x0 < 0.2)) return;
+            const gap = back ? sideGap(cover, back) : 0.08;
+            if (back && (gap < 0.02 || gap > 0.16)) return;
+            const union = back
+              ? Math.max(cover.x1, back.x1) - Math.min(cover.x0, back.x0)
+              : cover.x1 - cover.x0;
+            if (union < 0.66 || union > 0.86) return;
             let intrude = 0;
             packs.forEach((other, otherIndex) => {
               if (otherIndex === index) return;
               intrude += frameOverlap(projectBounds(other.cover, probeCam));
               if (other.back) intrude += frameOverlap(projectBounds(other.back, probeCam));
             });
-            if (intrude > 0.03) return;
-            const area = (cover.x1 - cover.x0) * (cover.y1 - cover.y0);
-            const score = area + Math.min(gap, 0.22) * 0.35 - intrude;
+            if (intrude > 0.025) return;
+            const ratio = back ? (back.x1 - back.x0) / Math.max(0.01, cover.x1 - cover.x0) : 1;
+            const score = -Math.abs(union - 0.76) - Math.abs(gap - 0.05) * 0.5 - Math.abs(ratio - 0.85) * 0.35 - intrude;
             if (!best || score > best.score) {
               best = {
                 score,
                 fov,
                 cam: probeCam.position.clone(),
-                look: new THREE.Vector3(line.home.x + sign * look, midY, lookZ),
+                look: new THREE.Vector3(line.home.x + inward * look, midY, lookZ),
               };
             }
           });
@@ -1448,9 +1456,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookTarget.copy(best.look);
       return;
     }
-    poseFov = narrow ? 34 : 30;
-    camTarget.set(line.home.x + sign * (narrow ? 3 : 3.8), line.coverY, FRONT_Z + (narrow ? 3 : 3.4));
-    lookTarget.set(line.home.x + sign * 0.9, line.coverY, FRONT_Z - DEPTH * 0.5);
+    poseFov = narrow ? 42 : 36;
+    camTarget.set(line.home.x + inward * 3.2, midY, FRONT_Z + 1.9);
+    lookTarget.set(line.home.x + inward * 0.35, midY, lookZ);
   }
 
   function paintPoster(screen) {
@@ -1539,7 +1547,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (suspended) return;
     renderer.toneMapping = THREE.AgXToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 2.15;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false;
     if (!graded) {
@@ -1661,104 +1669,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     gradeOff();
   }
 
-  const dofTarget = new THREE.WebGLRenderTarget(4, 4);
-  dofTarget.depthTexture = new THREE.DepthTexture();
-  dofTarget.texture.colorSpace = THREE.SRGBColorSpace;
-  dofTarget.texture.generateMipmaps = false;
-  const dofMat = new THREE.ShaderMaterial({
-    uniforms: {
-      tColor: { value: dofTarget.texture },
-      tDepth: { value: dofTarget.depthTexture },
-      resolution: { value: new THREE.Vector2(1, 1) },
-      focus: { value: 0.5 },
-      range: { value: 0.06 },
-      maxBlur: { value: 1.8 },
-    },
-    vertexShader: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `,
-    fragmentShader: `
-      uniform sampler2D tColor;
-      uniform sampler2D tDepth;
-      uniform vec2 resolution;
-      uniform float focus;
-      uniform float range;
-      uniform float maxBlur;
-      varying vec2 vUv;
-      void main() {
-        float d = texture2D(tDepth, vUv).x;
-        vec2 texel = 1.0 / resolution;
-        float coc = clamp(abs(d - focus) / range, 0.0, 1.0);
-        float radius = coc * maxBlur;
-        vec2 taps[8];
-        taps[0] = vec2(1.0, 0.0);
-        taps[1] = vec2(-1.0, 0.0);
-        taps[2] = vec2(0.0, 1.0);
-        taps[3] = vec2(0.0, -1.0);
-        taps[4] = vec2(0.7, 0.7);
-        taps[5] = vec2(-0.7, 0.7);
-        taps[6] = vec2(0.7, -0.7);
-        taps[7] = vec2(-0.7, -0.7);
-        vec3 col = texture2D(tColor, vUv).rgb;
-        for (int i = 0; i < 8; i++) {
-          col += texture2D(tColor, vUv + taps[i] * texel * radius).rgb;
-        }
-        col /= 9.0;
-        float ao = 0.0;
-        for (int i = 0; i < 4; i++) {
-          float nd = texture2D(tDepth, vUv + taps[i] * texel * 2.5).x;
-          ao += clamp((nd - d) * 22.0, 0.0, 1.0);
-        }
-        col *= 1.0 - ao * 0.05;
-        gl_FragColor = vec4(col, 1.0);
-      }
-    `,
-    depthTest: false,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  const dofScene = new THREE.Scene();
-  const dofCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const dofQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), dofMat);
-  dofQuad.frustumCulled = false;
-  dofScene.add(dofQuad);
-  const focusPt = new THREE.Vector3();
-
   function render(gl) {
-    if (suspended) {
-      gl.setRenderTarget(null);
-      gl.render(scene, camera);
-      return;
-    }
     gradeOn();
-    if (slot <= 0) {
-      gl.setRenderTarget(null);
-      gl.render(scene, camera);
-      return;
-    }
-    const w = Math.max(1, gl.domElement.width);
-    const h = Math.max(1, gl.domElement.height);
-    if (dofTarget.width !== w || dofTarget.height !== h) {
-      dofTarget.setSize(w, h);
-      dofMat.uniforms.resolution.value.set(w, h);
-    }
-    gl.setRenderTarget(dofTarget);
-    gl.render(scene, camera);
-    camera.updateMatrixWorld();
-    const focusLine = slot > 0 ? lines[slot - 1] : null;
-    if (focusLine) {
-      focusLine.coverSheet.getWorldPosition(focusPt);
-      focusPt.project(camera);
-    } else {
-      focusPt.copy(lookNow).project(camera);
-    }
-    dofMat.uniforms.focus.value = focusPt.z * 0.5 + 0.5;
+    if (suspended) gradeOff();
     gl.setRenderTarget(null);
-    gl.render(dofScene, dofCam);
+    gl.render(scene, camera);
   }
 
   aim(0, true);
