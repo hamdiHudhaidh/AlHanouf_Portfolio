@@ -1,18 +1,28 @@
 import * as THREE from 'three';
 
-// Design is a print studio. Ten lines are strung across the room, one project
-// each. The prints, the paper tag, and the pegs are what move: the chosen line
-// slides forward and the sheets swing once on their pegs, then settle. The
-// other lines step back under a white veil. 00 is the whole room. The camera
-// eases along with that slide and never cuts.
+// Design is a print studio. Ten lines are strung through the room, one project
+// each, at different heights, depths, and lengths so the whole studio reads
+// from 00 without the sheets covering one another. The chosen line slides
+// forward and the sheets swing once on their pegs, then settle. The other
+// lines step back under a white veil. The camera eases with that slide.
 
-const WIRE = 5.85;
-const UPPER_Y = 3.16;
-const LOWER_Y = 1.36;
-const UPPER_Z = [-6.55, -5.05, -3.55, -2.05, -0.55];
-const LOWER_Z = [-5.8, -4.3, -2.8, -1.3, 0.2];
-const SHIFTS = [-1.15, 0.95, -0.4, 1.15, -1.05, 0.45, -1.35, 0.85, 0.1, -0.75];
-const MAX_ROW = 3.2;
+// Each slot is the centre of one wire. span is half its length. maxW includes
+// the paper tag. The slots are staggered in x, y, and z so their sheets miss.
+const SLOTS = [
+  { x: -3.9, y: 4.7, z: -6.0, span: 2.2, maxW: 2.95, maxH: 0.9 },
+  { x: 0.0, y: 5.05, z: -3.5, span: 1.75, maxW: 2.55, maxH: 0.86 },
+  { x: 3.95, y: 4.42, z: -6.6, span: 2.3, maxW: 3.05, maxH: 0.92 },
+  { x: -4.85, y: 3.0, z: -2.2, span: 1.45, maxW: 2.2, maxH: 0.8 },
+  { x: -1.6, y: 3.22, z: -4.9, span: 1.6, maxW: 2.35, maxH: 0.84 },
+  { x: 1.45, y: 2.78, z: -1.85, span: 1.5, maxW: 2.2, maxH: 0.8 },
+  { x: 4.85, y: 3.12, z: -5.4, span: 1.35, maxW: 2.05, maxH: 0.78 },
+  { x: -3.2, y: 1.18, z: -4.2, span: 2.0, maxW: 2.75, maxH: 0.88 },
+  { x: 0.05, y: 1.0, z: -1.45, span: 1.75, maxW: 2.45, maxH: 0.84 },
+  { x: 3.7, y: 1.42, z: -6.2, span: 2.15, maxW: 2.8, maxH: 0.9 },
+];
+const TAG_W = 0.56;
+const TAG_GAP = 0.1;
+const TAG_EXTRA = TAG_GAP + TAG_W;
 const GAP = 0.05;
 const FRONT_Z = 2.35;
 
@@ -191,7 +201,7 @@ function itemsOf(project) {
   return (project.images || []).map((src) => ({ kind: 'image', src }));
 }
 
-function layoutPieces(items, maxH) {
+function layoutPieces(items, maxW, maxH) {
   if (!items.length) return { pieces: [], row: 0 };
   const n = items.length;
   const targetH = n >= 6 ? 0.72 : n >= 4 ? 0.88 : n === 1 ? 1.26 : 1.08;
@@ -203,7 +213,8 @@ function layoutPieces(items, maxH) {
   });
   let row = pieces.reduce((sum, p) => sum + p.w, 0) + GAP * Math.max(0, n - 1);
   const tallest = Math.max(...pieces.map((p) => p.h));
-  const fit = Math.min(1, MAX_ROW / Math.max(row, 0.01), maxH / Math.max(tallest, 0.01));
+  const rowMax = Math.max(0.4, maxW - TAG_EXTRA);
+  const fit = Math.min(1, rowMax / Math.max(row, 0.01), maxH / Math.max(tallest, 0.01));
   if (fit < 1) {
     pieces.forEach((p) => { p.w *= fit; p.h *= fit; });
     row *= fit;
@@ -279,7 +290,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   );
   windowLight.position.set(2.3, 3.7, -8.32);
   scene.add(windowLight);
-  [-6.25, 6.25].forEach((x) => {
+  [-6.7, 6.7].forEach((x) => {
     const side = new THREE.Mesh(new THREE.PlaneGeometry(36, 7.2), wallMat);
     side.position.set(x, 3.35, 2);
     side.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -315,20 +326,20 @@ export async function createDesign(renderer, { reduce, projects }) {
   const videos = [];
 
   prepared.forEach((entry, index) => {
-    const upper = index % 2 === 0;
-    const tier = Math.floor(index / 2);
-    const home = new THREE.Vector3(0, upper ? UPPER_Y : LOWER_Y, (upper ? UPPER_Z : LOWER_Z)[tier]);
-    const maxH = upper ? 1.52 : 0.98;
-    const laid = layoutPieces(entry.items, maxH);
+    const slot = SLOTS[index] || SLOTS[SLOTS.length - 1];
+    const home = new THREE.Vector3(slot.x, slot.y, slot.z);
+    const laid = layoutPieces(entry.items, slot.maxW, slot.maxH);
+    const centerNudge = TAG_EXTRA / 2;
+    laid.pieces.forEach((piece) => { piece.x -= centerNudge; });
     const lineGroup = new THREE.Group();
     const cluster = new THREE.Group();
     lineGroup.add(cluster);
-    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, WIRE * 2, 8), wireMat);
+    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, slot.span * 2, 8), wireMat);
     wire.rotation.z = Math.PI / 2;
     lineGroup.add(wire);
-    [-WIRE, WIRE].forEach((x) => {
-      const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, 0.04), woodMat);
-      cleat.position.set(x, home.y, home.z);
+    [-slot.span, slot.span].forEach((x) => {
+      const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.055, 0.05), woodMat);
+      cleat.position.set(home.x + x, home.y, home.z);
       scene.add(cleat);
     });
 
@@ -441,9 +452,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       }
     });
 
-    const tagW = 0.56;
+    const tagW = TAG_W;
     const tagH = 0.84;
-    const tagX = laid.row / 2 + 0.1 + tagW / 2;
+    const tagX = laid.row / 2 + TAG_GAP + tagW / 2 - centerNudge;
     const tagPivot = new THREE.Group();
     tagPivot.position.set(tagX, 0, 0.02);
     addPeg(tagPivot, 0);
@@ -471,7 +482,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       bottom = Math.min(bottom, visit.position.y - visitH / 2);
     }
 
-    const left = -laid.row / 2;
+    const left = -laid.row / 2 - centerNudge;
     const right = tagX + tagW / 2;
     const veil = new THREE.Mesh(
       new THREE.PlaneGeometry(right - left + 0.28, -bottom + 0.18),
@@ -488,7 +499,6 @@ export async function createDesign(renderer, { reduce, projects }) {
     cluster.add(veil);
 
     lineGroup.position.copy(home);
-    cluster.position.x = SHIFTS[index] || 0;
     scene.add(lineGroup);
 
     const frontY = 1.5 - bottom / 2;
@@ -505,9 +515,10 @@ export async function createDesign(renderer, { reduce, projects }) {
       back: new THREE.Vector3(home.x, home.y, home.z - 1.2),
       from: home.clone(),
       to: home.clone(),
-      shiftHome: SHIFTS[index] || 0,
-      shiftFrom: SHIFTS[index] || 0,
-      shiftTo: SHIFTS[index] || 0,
+      wireHalf: slot.span,
+      shiftHome: 0,
+      shiftFrom: 0,
+      shiftTo: 0,
       scaleFrom: 1,
       scaleTo: 1,
       opFrom: 0,
@@ -551,15 +562,24 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function overviewPose() {
-    let minY = 0.2;
-    let maxY = UPPER_Y + 0.2;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = 0.08;
+    let maxY = 1;
+    let zSum = 0;
     lines.forEach((line) => {
-      minY = Math.min(minY, line.home.y + line.bottom);
-      maxY = Math.max(maxY, line.home.y + 0.08);
+      const x = line.home.x;
+      const y = line.home.y;
+      minX = Math.min(minX, x - line.wireHalf, x + line.left);
+      maxX = Math.max(maxX, x + line.wireHalf, x + line.right);
+      minY = Math.min(minY, y + line.bottom);
+      maxY = Math.max(maxY, y + 0.06);
+      zSum += line.home.z;
     });
-    const padX = narrow ? 0.15 : 0.45;
-    const padY = narrow ? 0.18 : 0.42;
-    fitPose(-WIRE - padX, WIRE + padX, minY - padY, maxY + padY, -2.9, narrow ? 0.94 : 0.84);
+    const lookZ = lines.length ? zSum / lines.length : -3;
+    const padX = narrow ? 0.18 : 0.32;
+    const padY = narrow ? 0.12 : 0.26;
+    fitPose(minX - padX, maxX + padX, minY - padY, maxY + padY, lookZ, narrow ? 0.93 : 0.88);
   }
 
   function focusPose(line) {
