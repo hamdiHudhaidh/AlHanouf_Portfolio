@@ -1,20 +1,20 @@
 import * as THREE from 'three';
 
-// Design is one off-white wall. Twine lines run across it in even rows, each
-// with a gentle sag and a screw-eye at either end. Pieces hang from S-hooks
-// on short drops of different lengths, and some hang from the sheet above.
-// The chosen project's line comes forward and enlarges; the pieces swing once
-// and settle. The others stay on the wall under a white veil.
+// Design is one off-white wall with two layers of twine.
+// The front lines hold one cover per project, hung at uneven drops.
+// Behind each cover, shorter strings sit closer to the wall and hold the
+// rest of that project. 00 shows the covers. An arrow zooms in until the
+// frame holds only that cover and its back strings; the back layer lowers
+// into place on the way in and lifts away on the way out.
 
 const WALL_HALF = 5.2;
 const SAG = 0.22;
-const ROW_PITCH = 1.52;
-const TOP_Y = 6.15;
-const SEG_X = 2.56;
+const ROW_PITCH = 2.4;
+const TOP_Y = 7.3;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
-const FOCUS_SCALE = 1.54;
-const FRONT_Z = 1.22;
+const TUCK_Y = 0.28;
+const TUCK_SCALE = 0.18;
 
 function hash(n) {
   let s = Math.imul(n + 1, 9973) >>> 0;
@@ -232,7 +232,10 @@ function unitSize(style, item) {
   return { w: photoW + 0.06, h: photoH + 0.08, photoW, photoH };
 }
 
-function layoutPieces(items, seed, note) {
+function layoutPieces(items, seed, note, limits = {}) {
+  const maxW = limits.maxW ?? MAX_W;
+  const colMax = limits.colMax ?? COL_MAX;
+  const withTag = limits.tag !== false;
   const rnd = hash(seed);
   const images = items.filter((it) => it.kind !== 'video' && it.kind !== 'website');
   const videos = items.filter((it) => it.kind === 'video');
@@ -292,18 +295,18 @@ function layoutPieces(items, seed, note) {
     if (chain) i += 1;
   }
 
-  const tagW0 = 0.44;
-  const tagH0 = 0.76;
-  const tagGap0 = 0.09;
+  const tagW0 = withTag ? 0.44 : 0;
+  const tagH0 = withTag ? 0.76 : 0;
+  const tagGap0 = withTag ? 0.09 : 0;
   let row = tagGap0 + tagW0;
-  let tallest = tagH0 + 0.2;
+  let tallest = withTag ? tagH0 + 0.2 : 0.16;
   columns.forEach((col, i) => {
     col.w = Math.max(col.parent.w, col.child ? col.child.w : 0);
     const h = col.drop + 0.06 + col.parent.h + (col.child ? col.childDrop + 0.05 + col.child.h : 0);
     row += col.w + (i ? col.gap : 0);
     tallest = Math.max(tallest, h);
   });
-  const fit = Math.min(1, MAX_W / Math.max(row, 0.01), COL_MAX / Math.max(tallest, 0.01));
+  const fit = Math.min(1, maxW / Math.max(row, 0.01), colMax / Math.max(tallest, 0.01));
   const scalePiece = (piece) => {
     if (!piece) return;
     piece.w *= fit;
@@ -328,17 +331,27 @@ function layoutPieces(items, seed, note) {
   });
   const tagW = tagW0 * fit;
   const tagH = tagH0 * fit;
-  const tagX = x + tagGap0 * fit + tagW / 2;
+  const tagDrop = (0.08 + rnd() * 0.18) * fit;
+  const tagTilt = (rnd() - 0.5) * 0.05;
+  let tagX = x + tagGap0 * fit + tagW / 2;
+  let left = -row / 2;
+  let right = row / 2;
+  if (withTag && !columns.length) {
+    tagX = 0;
+    left = -tagW / 2;
+    right = tagW / 2;
+  }
   return {
     columns,
-    row,
-    left: -row / 2,
-    right: row / 2,
+    row: right - left,
+    left,
+    right,
     tagX,
     tagW,
     tagH,
-    tagDrop: (0.08 + rnd() * 0.18) * fit,
-    tagTilt: (rnd() - 0.5) * 0.05,
+    tagDrop,
+    tagTilt,
+    hang: tallest * fit,
   };
 }
 
@@ -472,7 +485,34 @@ export async function createDesign(renderer, { reduce, projects }) {
         });
       }
     }
-    prepared.push({ project, items: ready });
+    const coverSrc = project.images?.[0];
+    let cover = null;
+    if (coverSrc) {
+      const img = await loadImage(coverSrc);
+      const fitted = img ? fitImage(img, maxTex) : null;
+      if (fitted) {
+        const size = sourceSize(fitted);
+        cover = { kind: 'image', src: coverSrc, image: fitted, aspect: size.w / size.h };
+      }
+    }
+    let skipped = false;
+    const content = [];
+    ready.forEach((item) => {
+      if (!skipped && cover && item.kind === 'image' && item.src === cover.src) {
+        skipped = true;
+        return;
+      }
+      content.push(item);
+    });
+    if (!cover) {
+      const still = ready.find((item) => item.poster || (item.image && item.kind !== 'website'));
+      const image = still?.poster || still?.image;
+      if (image) {
+        const size = sourceSize(image);
+        cover = { kind: 'image', image, aspect: size.w / size.h };
+      }
+    }
+    prepared.push({ project, cover, content });
   }
 
   const scene = new THREE.Scene();
@@ -584,7 +624,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const curve = new THREE.CatmullRomCurve3(pts);
     const twine = new THREE.Mesh(new THREE.TubeGeometry(curve, 72, 0.02, 6, false), twineMat);
     twine.castShadow = true;
-    twine.position.set(0, rowY, 0.07);
+    twine.position.set(0, rowY, 0.14);
     scene.add(twine);
     [-WALL_HALF, WALL_HALF].forEach((x) => {
       const hook = new THREE.Group();
@@ -596,7 +636,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       screw.position.z = -0.02;
       screw.castShadow = true;
       hook.add(ring, screw);
-      hook.position.set(x, rowY + sagAt(x), 0.07);
+      hook.position.set(x, rowY + sagAt(x), 0.14);
       scene.add(hook);
     });
   }
@@ -608,16 +648,43 @@ export async function createDesign(renderer, { reduce, projects }) {
   const visits = [];
   const videos = [];
 
+  function addShortString(parent, y, half) {
+    const pts = [];
+    const steps = 18;
+    for (let i = 0; i <= steps; i += 1) {
+      const x = -half + (i / steps) * half * 2;
+      const sag = -0.055 * (1 - (x / half) * (x / half));
+      pts.push(new THREE.Vector3(x, y + sag, 0));
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.011, 5, false),
+      twineMat,
+    );
+    mesh.castShadow = true;
+    parent.add(mesh);
+    [-half, half].forEach((x) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.007, 6, 14), metalMat);
+      ring.rotation.y = Math.PI / 2;
+      ring.castShadow = true;
+      ring.position.set(x, y, 0.004);
+      parent.add(ring);
+    });
+  }
+
+  function shortSag(x, half) {
+    const u = x / Math.max(half, 0.01);
+    return -0.055 * (1 - u * u);
+  }
+
   prepared.forEach((entry, index) => {
+    const place = hash(index + 11);
     const row = Math.floor(index / 2);
     const col = index % 2;
     const cols = Math.min(2, prepared.length - row * 2);
-    const segX = cols === 1 ? 0 : (col === 0 ? -SEG_X : SEG_X);
-    const home = new THREE.Vector3(segX, TOP_Y - row * ROW_PITCH, 0.09);
-    const laid = layoutPieces(entry.items, index + 3, entry.project.text || '');
+    const side = cols === 1 ? (place() - 0.5) * 1.4 : (col === 0 ? -1 : 1) * (2.15 + place() * 1.2);
+    const home = new THREE.Vector3(side, TOP_Y - row * ROW_PITCH, 0.18);
     const lineGroup = new THREE.Group();
-    const cluster = new THREE.Group();
-    lineGroup.add(cluster);
+    const cluster = lineGroup;
 
     const pivots = [];
     const lineVideos = [];
@@ -767,10 +834,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       return topY - piece.h;
     }
 
-    laid.columns.forEach((col) => {
+    function hangColumn(parent, col, stringY, half) {
       const pivot = new THREE.Group();
-      const worldX = home.x + col.x;
-      pivot.position.set(col.x, sagAt(worldX), 0.012);
+      pivot.position.set(col.x, stringY + shortSag(col.x, half), 0.012);
       pivot.rotation.z = col.tilt || 0;
       addSHook(pivot, 0.01);
       addDrop(pivot, -0.03, col.drop, col.sway);
@@ -780,136 +846,150 @@ export async function createDesign(renderer, { reduce, projects }) {
         addDrop(pivot, low - 0.02, col.childDrop, col.sway * -0.6);
         low = hang(pivot, col.child, low - 0.02 - col.childDrop);
       }
-      cluster.add(pivot);
+      parent.add(pivot);
       pivots.push(pivot);
-      bottom = Math.min(bottom, pivot.position.y + low);
-    });
+      return pivot.position.y + low;
+    }
 
-    const { tagW, tagH, tagX } = laid;
-    const tagPivot = new THREE.Group();
-    tagPivot.position.set(tagX, sagAt(home.x + tagX), 0.02);
-    tagPivot.rotation.z = laid.tagTilt || 0;
-    addSHook(tagPivot, 0.01);
-    addDrop(tagPivot, -0.03, laid.tagDrop, 0.012);
-    const tag = new THREE.Mesh(
-      new THREE.PlaneGeometry(tagW, tagH),
-      new THREE.MeshBasicMaterial({
-        map: tagTexture(entry.project, renderer),
-        transparent: true,
-        opacity: 0.9,
-        alphaTest: 0.35,
-        toneMapped: false,
-        shadowSide: THREE.DoubleSide,
-      }),
-    );
-    tag.castShadow = true;
-    tag.position.y = -(0.03 + laid.tagDrop + tagH / 2);
-    tagPivot.add(tag);
-    pivots.push(tagPivot);
-    cluster.add(tagPivot);
-    bottom = Math.min(bottom, tagPivot.position.y + tag.position.y - tagH / 2);
+    const heroStyles = ['print', 'curl', 'burnt', 'print', 'cyan', 'curl'];
+    const heroStyle = entry.cover ? heroStyles[index % heroStyles.length] : 'print';
+    const heroRnd = hash(index + 29);
+    const heroSize = unitSize(heroStyle, entry.cover || { aspect: 1 });
+    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 1.2 : 1.45;
+    const hero = {
+      style: heroStyle,
+      image: entry.cover?.image || null,
+      kind: 'image',
+      items: entry.cover ? [entry.cover] : [],
+      w: heroSize.w * heroScale,
+      h: heroSize.h * heroScale,
+      photoW: (heroSize.photoW || heroSize.w * 0.82) * heroScale,
+      photoH: (heroSize.photoH || heroSize.h * 0.78) * heroScale,
+    };
+    const heroDrop = 0.05 + heroRnd() * 0.26;
+    const heroPivot = new THREE.Group();
+    heroPivot.position.set(0, sagAt(home.x), 0.02);
+    heroPivot.rotation.z = (heroRnd() - 0.5) * 0.1;
+    addSHook(heroPivot, 0.01);
+    addDrop(heroPivot, -0.03, heroDrop, (heroRnd() - 0.5) * 0.02);
+    const heroLow = hang(heroPivot, hero, -(0.03 + heroDrop));
+    lineGroup.add(heroPivot);
+    pivots.push(heroPivot);
+    const heroBottom = heroPivot.position.y + heroLow;
+    const heroTop = heroPivot.position.y + 0.06;
 
-    const href = entry.project.links?.[0]?.href;
-    if (href) {
-      const visitH = 0.16;
-      const visitDrop = 0.05;
-      const visitTop = tag.position.y - tagH / 2;
-      addSHook(tagPivot, visitTop + 0.008);
-      addDrop(tagPivot, visitTop - 0.015, visitDrop, -0.01);
-      const visit = new THREE.Mesh(
-        new THREE.PlaneGeometry(Math.min(0.42, tagW), visitH),
-        new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
+    const backGroup = new THREE.Group();
+    backGroup.position.set(0, 0, -0.12);
+    lineGroup.add(backGroup);
+
+    const pages = entry.content.filter((item) => item.kind === 'website');
+    const rest = entry.content.filter((item) => item.kind !== 'website');
+    const hangDepth = heroPivot.position.y - heroBottom;
+    const room = Math.max(0.72, ROW_PITCH - hangDepth - 0.16);
+    const chunks = [];
+    if (pages.length) {
+      if (rest.length) chunks.push({ items: rest, tag: false, page: false });
+      chunks.push({ items: pages, tag: true, page: true });
+    } else if (rest.length > 3 && room > 1.15) {
+      const mid = Math.ceil(rest.length / 2);
+      chunks.push({ items: rest.slice(0, mid), tag: false, page: false });
+      chunks.push({ items: rest.slice(mid), tag: true, page: false });
+    } else {
+      chunks.push({ items: rest, tag: true, page: false });
+    }
+    const share = room / chunks.length;
+    let stringY = heroBottom - 0.06;
+    let minX = -hero.w / 2 - 0.08;
+    let maxX = hero.w / 2 + 0.08;
+    let minY = heroBottom;
+    chunks.forEach((chunk, ri) => {
+      const laid = layoutPieces(
+        chunk.items,
+        index * 19 + ri + 4,
+        chunk.tag ? (entry.project.text || '') : '',
+        {
+          maxW: 2.55,
+          colMax: Math.max(0.42, share - 0.12),
+          tag: chunk.tag,
+        },
       );
-      visit.position.y = visitTop - 0.015 - visitDrop - visitH / 2;
-      visit.castShadow = true;
-      visit.userData.href = href;
-      tagPivot.add(visit);
-      visits.push(visit);
-      bottom = Math.min(bottom, visit.position.y - visitH / 2);
-    }
-
-    const left = laid.left;
-    const right = laid.right;
-    const veil = new THREE.Mesh(
-      new THREE.PlaneGeometry(right - left + 0.28, -bottom + 0.18),
-      new THREE.MeshBasicMaterial({
-        color: 0xfffaf4,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        fog: false,
-      }),
-    );
-    veil.position.set((left + right) / 2, bottom / 2, 0.09);
-    veil.renderOrder = 4;
-    cluster.add(veil);
-
-    const cord = new THREE.Group();
-    const cordLeft = left - 0.2;
-    const cordRight = right + 0.2;
-    const cordPts = [];
-    for (let s = 0; s <= 28; s++) {
-      const lx = cordLeft + ((cordRight - cordLeft) * s) / 28;
-      cordPts.push(new THREE.Vector3(lx, sagAt(home.x + lx), 0.004));
-    }
-    const cordMat = twineMat.clone();
-    cordMat.transparent = true;
-    cordMat.opacity = 0;
-    const cordMesh = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cordPts), 40, 0.02, 5, false),
-      cordMat,
-    );
-    cordMesh.castShadow = true;
-    cord.add(cordMesh);
-    const cordMetal = metalMat.clone();
-    cordMetal.transparent = true;
-    cordMetal.opacity = 0;
-    [cordLeft, cordRight].forEach((lx) => {
-      const hook = new THREE.Group();
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.009, 8, 16), cordMetal);
-      ring.rotation.y = Math.PI / 2;
-      ring.castShadow = true;
-      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.006, 0.04, 6), cordMetal);
-      screw.rotation.x = Math.PI / 2;
-      screw.position.z = -0.016;
-      screw.castShadow = true;
-      hook.add(ring, screw);
-      hook.position.set(lx, sagAt(home.x + lx), 0.006);
-      cord.add(hook);
+      const half = Math.max(0.58, laid.row / 2 + 0.12);
+      addShortString(backGroup, stringY, half);
+      laid.columns.forEach((col) => {
+        minY = Math.min(minY, hangColumn(backGroup, col, stringY, half));
+      });
+      if (chunk.tag && laid.tagH) {
+        const pivot = new THREE.Group();
+        pivot.position.set(laid.tagX, stringY + shortSag(laid.tagX, half), 0.02);
+        pivot.rotation.z = laid.tagTilt || 0;
+        addSHook(pivot, 0.01);
+        addDrop(pivot, -0.03, laid.tagDrop, 0.012);
+        const tag = new THREE.Mesh(
+          new THREE.PlaneGeometry(laid.tagW, laid.tagH),
+          new THREE.MeshBasicMaterial({
+            map: tagTexture(entry.project, renderer),
+            transparent: true,
+            opacity: 0.9,
+            alphaTest: 0.35,
+            toneMapped: false,
+            shadowSide: THREE.DoubleSide,
+          }),
+        );
+        tag.castShadow = true;
+        tag.position.y = -(0.03 + laid.tagDrop + laid.tagH / 2);
+        pivot.add(tag);
+        pivots.push(pivot);
+        backGroup.add(pivot);
+        let low = pivot.position.y + tag.position.y - laid.tagH / 2;
+        const href = entry.project.links?.[0]?.href;
+        if (href) {
+          const visitH = 0.16;
+          const visitDrop = 0.045;
+          const visitTop = tag.position.y - laid.tagH / 2;
+          addSHook(pivot, visitTop + 0.008);
+          addDrop(pivot, visitTop - 0.012, visitDrop, -0.008);
+          const visit = new THREE.Mesh(
+            new THREE.PlaneGeometry(Math.min(0.4, laid.tagW), visitH),
+            new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
+          );
+          visit.position.y = visitTop - 0.012 - visitDrop - visitH / 2;
+          visit.castShadow = true;
+          visit.userData.href = href;
+          pivot.add(visit);
+          visits.push(visit);
+          low = Math.min(low, pivot.position.y + visit.position.y - visitH / 2);
+        }
+        minY = Math.min(minY, low);
+      }
+      minX = Math.min(minX, -half);
+      maxX = Math.max(maxX, half);
+      minY = Math.min(minY, stringY - laid.hang);
+      stringY -= share;
     });
-    cord.visible = false;
-    cluster.add(cord);
 
     lineGroup.position.copy(home);
     scene.add(lineGroup);
+    backGroup.position.y = TUCK_Y;
+    backGroup.scale.setScalar(TUCK_SCALE);
 
-    const frontY = 2.72 - (bottom / 2) * FOCUS_SCALE;
     lines.push({
       project: entry.project,
       group: lineGroup,
-      cluster,
-      veil,
+      backGroup,
       pivots,
       videos: lineVideos,
       scroll: cluster.userData.scroll || null,
       home,
-      front: new THREE.Vector3(0, frontY, FRONT_Z),
-      back: home.clone(),
-      from: home.clone(),
-      to: home.clone(),
-      shiftHome: 0,
-      shiftFrom: 0,
-      shiftTo: 0,
-      scaleFrom: 1,
-      scaleTo: 1,
-      opFrom: 0,
-      opTo: 0,
+      reveal: 0,
+      revealFrom: 0,
+      revealTo: 0,
       swingStart: -1,
-      left,
-      right,
-      bottom,
-      cord,
-      cordMats: [cordMat, cordMetal],
+      minX: home.x + minX,
+      maxX: home.x + maxX,
+      minY: home.y + minY,
+      maxY: home.y + heroTop,
+      heroBottom,
+      heroTop,
     });
   });
 
@@ -940,11 +1020,11 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function overviewPose() {
-    let minY = 0.15;
-    let maxY = TOP_Y + 0.2;
+    let minY = Infinity;
+    let maxY = -Infinity;
     lines.forEach((line) => {
-      minY = Math.min(minY, line.home.y + line.bottom);
-      maxY = Math.max(maxY, line.home.y + 0.08);
+      minY = Math.min(minY, line.home.y + line.heroBottom);
+      maxY = Math.max(maxY, line.home.y + line.heroTop);
     });
     const padX = narrow ? 0.45 : 0.7;
     const padY = narrow ? 0.28 : 0.42;
@@ -953,25 +1033,30 @@ export async function createDesign(renderer, { reduce, projects }) {
       WALL_HALF + padX,
       minY - padY,
       maxY + padY,
-      0,
+      0.14,
       narrow ? 0.84 : 0.8,
       narrow ? 0.28 : 0.78,
     );
   }
 
   function focusPose(line) {
-    const s = FOCUS_SCALE;
-    const y = line.front.y;
-    const z = line.front.z;
+    const padX = narrow ? 0.08 : 0.12;
+    const padY = narrow ? 0.06 : 0.08;
     fitPose(
-      line.left * s - 0.5,
-      line.right * s + 0.55,
-      y + line.bottom * s - 0.26,
-      y + 0.34,
-      z,
-      narrow ? 0.86 : 0.8,
-      narrow ? 0.04 : 0.08,
+      line.minX - padX,
+      line.maxX + padX,
+      line.minY - padY,
+      line.maxY + padY,
+      line.home.z,
+      narrow ? 0.92 : 0.9,
+      narrow ? 0.02 : 0.04,
     );
+  }
+
+  function applyReveal(line) {
+    const reveal = line.reveal;
+    line.backGroup.position.y = TUCK_Y * (1 - reveal);
+    line.backGroup.scale.setScalar(TUCK_SCALE + (1 - TUCK_SCALE) * reveal);
   }
 
   function paintPoster(screen) {
@@ -1003,17 +1088,6 @@ export async function createDesign(renderer, { reduce, projects }) {
     });
   }
 
-  function cordOpacity(line) {
-    const d = line.group.position.distanceTo(line.home);
-    return Math.min(1, Math.max(0, (d - 0.05) / 0.4));
-  }
-
-  function paintCord(line) {
-    const opacity = cordOpacity(line);
-    line.cord.visible = opacity > 0.03;
-    line.cordMats.forEach((mat) => { mat.opacity = opacity; });
-  }
-
   function aim(next, snap) {
     const count = lines.length + 1;
     slot = ((next % count) + count) % count;
@@ -1023,41 +1097,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     camTo.copy(camTarget);
     lookTo.copy(lookTarget);
     lines.forEach((line, i) => {
-      line.from.copy(line.group.position);
-      line.shiftFrom = line.cluster.position.x;
-      line.scaleFrom = line.group.scale.x;
-      line.opFrom = line.veil.material.opacity;
-      if (focus < 0) {
-        line.to.copy(line.home);
-        line.shiftTo = line.shiftHome;
-        line.scaleTo = 1;
-        line.opTo = 0;
-        line.swingStart = -1;
-      } else if (i === focus) {
-        line.to.copy(line.front);
-        line.shiftTo = 0;
-        line.scaleTo = FOCUS_SCALE;
-        line.opTo = 0;
-        line.swingStart = snap || reduce ? -1 : performance.now();
-      } else {
-        line.to.copy(line.back);
-        line.shiftTo = line.shiftHome;
-        line.scaleTo = 1;
-        line.opTo = 0.52;
-        line.swingStart = -1;
-      }
-      line.veil.renderOrder = i === focus ? 2 : 5;
+      line.revealFrom = line.reveal;
+      line.revealTo = i === focus ? 1 : 0;
+      line.swingStart = i === focus && !snap && !reduce ? performance.now() : -1;
     });
     syncMedia();
     if (snap || reduce) {
       moving = false;
       lines.forEach((line) => {
-        line.group.position.copy(line.to);
-        line.cluster.position.x = line.shiftTo;
-        line.group.scale.setScalar(line.scaleTo);
-        line.veil.material.opacity = line.opTo;
+        line.reveal = line.revealTo;
+        applyReveal(line);
         line.pivots.forEach((pivot) => { pivot.rotation.x = 0; });
-        paintCord(line);
       });
       camera.position.copy(camTo);
       lookNow.copy(lookTo);
@@ -1066,13 +1116,16 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
     camFrom.copy(camera.position);
     lookFrom.copy(lookNow);
-    let travel = camFrom.distanceTo(camTo);
-    lines.forEach((line) => { travel = Math.max(travel, line.from.distanceTo(line.to)); });
+    const travel = camFrom.distanceTo(camTo);
     moveMs = Math.min(1600, Math.max(1000, 760 + travel * 70));
     moveEaseIn = !moving;
     moveStart = performance.now();
     moving = travel > 0.02;
     if (!moving) {
+      lines.forEach((line) => {
+        line.reveal = line.revealTo;
+        applyReveal(line);
+      });
       camera.position.copy(camTo);
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
@@ -1101,12 +1154,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const focus = slot - 1;
     lines.forEach((line, i) => {
       if (apply) {
-        line.group.position.lerpVectors(line.from, line.to, e);
-        line.cluster.position.x = line.shiftFrom + (line.shiftTo - line.shiftFrom) * e;
-        const s = line.scaleFrom + (line.scaleTo - line.scaleFrom) * e;
-        line.group.scale.setScalar(s);
-        line.veil.material.opacity = line.opFrom + (line.opTo - line.opFrom) * e;
-        paintCord(line);
+        line.reveal = line.revealFrom + (line.revealTo - line.revealFrom) * e;
+        applyReveal(line);
       }
       const on = i === focus;
       line.pivots.forEach((pivot, k) => {
