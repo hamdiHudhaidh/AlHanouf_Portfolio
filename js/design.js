@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 
 // Design is one off-white wall with two layers of twine.
 // The front lines hold one cover per project. Shorter strings behind each
@@ -14,9 +15,9 @@ const TOP_Y = 6.85;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const FRONT_Z = 2.05;
-const DEPTH = 1.72;
-const ORBIT = 3.35;
-const FOCUS_DIST = 3.15;
+const DEPTH = 1.15;
+const ORBIT = 2.15;
+const FOCUS_DIST = 2.2;
 
 function hash(n) {
   let s = Math.imul(n + 1, 9973) >>> 0;
@@ -173,25 +174,27 @@ function tagTexture(project, renderer) {
 
 function visitTexture(renderer) {
   const canvas = document.createElement('canvas');
-  canvas.width = 900;
-  canvas.height = 280;
+  canvas.width = 720;
+  canvas.height = 220;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#f7f1e8';
+  g.fillStyle = '#f3eadc';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = 'rgba(29,27,25,0.45)';
-  g.lineWidth = 8;
-  g.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
-  g.fillStyle = '#1d1b19';
-  g.font = '500 92px Inter, sans-serif';
+  g.strokeStyle = 'rgba(110, 82, 48, 0.1)';
+  g.lineWidth = 1;
+  for (let y = 6; y < canvas.height; y += 6) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(canvas.width, y + Math.sin(y * 0.2) * 2);
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(90, 64, 36, 0.28)';
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+  g.fillStyle = '#2a241e';
+  g.font = 'italic 500 68px Cormorant, serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('Visit site', canvas.width / 2, canvas.height / 2 + 4);
-  g.strokeStyle = '#a8603f';
-  g.lineWidth = 6;
-  g.beginPath();
-  g.moveTo(250, 196);
-  g.lineTo(650, 196);
-  g.stroke();
+  g.fillText('Visit site', canvas.width / 2, canvas.height / 2 + 2);
   return makeTexture(canvas, renderer);
 }
 
@@ -200,15 +203,16 @@ function sprocketTexture(renderer) {
   canvas.width = 64;
   canvas.height = 160;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#1d1b19';
+  g.fillStyle = '#141210';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.fillStyle = '#f3eee6';
+  g.globalCompositeOperation = 'destination-out';
   for (let i = 0; i < 4; i++) {
     const y = 14 + i * 38;
     g.fillRect(16, y, 32, 18);
   }
   const tex = makeTexture(canvas, renderer, { mipmap: false });
   tex.wrapT = THREE.RepeatWrapping;
+  tex.premultiplyAlpha = false;
   return tex;
 }
 
@@ -440,29 +444,202 @@ function collageSheet(images, note) {
   return canvas;
 }
 
-function windowLightTexture() {
+function windowCookie() {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = 512;
+  canvas.height = 512;
   const g = canvas.getContext('2d');
-  g.clearRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = 'rgba(62, 48, 36, 0.55)';
-  g.lineWidth = 26;
-  g.shadowColor = 'rgba(62, 48, 36, 0.4)';
-  g.shadowBlur = 22;
-  for (let x = 80; x < 1024; x += 236) {
+  g.fillStyle = '#fff8f2';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = 'rgba(42, 34, 28, 0.78)';
+  g.lineWidth = 40;
+  g.lineCap = 'butt';
+  for (let x = 64; x < 512; x += 128) {
     g.beginPath();
     g.moveTo(x, 0);
-    g.lineTo(x, 1024);
+    g.lineTo(x, 512);
     g.stroke();
   }
-  for (let y = 70; y < 1024; y += 210) {
+  for (let y = 70; y < 512; y += 140) {
     g.beginPath();
     g.moveTo(0, y);
-    g.lineTo(1024, y);
+    g.lineTo(512, y);
     g.stroke();
   }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function noiseCanvas(size, paint) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  paint(canvas.getContext('2d'), size);
   return canvas;
+}
+
+function plasterTextures(renderer) {
+  const color = noiseCanvas(512, (g, s) => {
+    g.fillStyle = '#ece7df';
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 2800; i += 1) {
+      const v = 210 + Math.random() * 40;
+      g.fillStyle = `rgba(${v},${v - 6},${v - 14},0.18)`;
+      g.fillRect(Math.random() * s, Math.random() * s, 2, 2);
+    }
+  });
+  const rough = noiseCanvas(512, (g, s) => {
+    const img = g.createImageData(s, s);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = 170 + Math.random() * 70;
+      img.data[i] = n;
+      img.data[i + 1] = n;
+      img.data[i + 2] = n;
+      img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  });
+  const height = noiseCanvas(256, (g, s) => {
+    const img = g.createImageData(s, s);
+    for (let y = 0; y < s; y += 1) {
+      for (let x = 0; x < s; x += 1) {
+        const n = 128 + (Math.random() - 0.5) * 28;
+        const i = (y * s + x) * 4;
+        img.data[i] = n;
+        img.data[i + 1] = n;
+        img.data[i + 2] = n;
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  });
+  const normal = noiseCanvas(256, (g, s) => {
+    const src = height.getContext('2d').getImageData(0, 0, s, s).data;
+    const img = g.createImageData(s, s);
+    const hAt = (x, y) => src[(((y + s) % s) * s + ((x + s) % s)) * 4];
+    for (let y = 0; y < s; y += 1) {
+      for (let x = 0; x < s; x += 1) {
+        const dx = hAt(x + 1, y) - hAt(x - 1, y);
+        const dy = hAt(x, y + 1) - hAt(x, y - 1);
+        const i = (y * s + x) * 4;
+        img.data[i] = 128 + dx * 0.8;
+        img.data[i + 1] = 128 + dy * 0.8;
+        img.data[i + 2] = 255;
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  });
+  const colorTex = makeTexture(color, renderer);
+  colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
+  colorTex.repeat.set(3.2, 2.2);
+  const roughTex = makeTexture(rough, renderer, { mipmap: false });
+  roughTex.colorSpace = THREE.NoColorSpace;
+  roughTex.wrapS = roughTex.wrapT = THREE.RepeatWrapping;
+  roughTex.repeat.set(3.2, 2.2);
+  const normalTex = makeTexture(normal, renderer, { mipmap: false });
+  normalTex.colorSpace = THREE.NoColorSpace;
+  normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+  normalTex.repeat.set(4, 3);
+  return { colorTex, roughTex, normalTex };
+}
+
+function juteTextures(renderer) {
+  const canvas = noiseCanvas(256, (g, s) => {
+    g.fillStyle = '#cbb892';
+    g.fillRect(0, 0, s, s);
+    g.lineWidth = 2;
+    for (let x = -s; x < s * 2; x += 6) {
+      g.strokeStyle = x % 12 === 0 ? '#a89068' : 'rgba(255, 244, 228, 0.35)';
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x + 36, s);
+      g.stroke();
+    }
+    for (let y = 0; y < s; y += 9) {
+      g.strokeStyle = 'rgba(90, 58, 28, 0.18)';
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(s, y + 4);
+      g.stroke();
+    }
+  });
+  const tex = makeTexture(canvas, renderer);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(18, 2);
+  return tex;
+}
+
+function woodTexture(renderer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#c6a36a';
+  g.fillRect(0, 0, 128, 256);
+  for (let y = 0; y < 256; y += 3) {
+    const shade = 150 + Math.sin(y * 0.17) * 28 + Math.random() * 18;
+    g.strokeStyle = `rgb(${shade},${Math.round(shade * 0.72)},${Math.round(shade * 0.42)})`;
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(128, y + Math.sin(y) * 2);
+    g.stroke();
+  }
+  const tex = makeTexture(canvas, renderer);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function kraftTexture(renderer) {
+  const canvas = noiseCanvas(256, (g, s) => {
+    g.fillStyle = '#c4a574';
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1400; i += 1) {
+      const v = 120 + Math.random() * 80;
+      g.fillStyle = `rgba(${v},${Math.round(v * 0.72)},${Math.round(v * 0.4)},0.22)`;
+      g.fillRect(Math.random() * s, Math.random() * s, 3, 1);
+    }
+  });
+  const tex = makeTexture(canvas, renderer);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function fibreTube(curve, segments, radius, radial = 6) {
+  const geo = new THREE.TubeGeometry(curve, segments, radius, radial, false);
+  const pos = geo.attributes.position;
+  const nrm = geo.attributes.normal;
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i += 1) {
+    const along = uv.getX(i);
+    const around = uv.getY(i) * Math.PI * 2;
+    const ridge = radius * 0.16 * Math.sin(around * 3.0 + along * 48.0);
+    pos.setXYZ(
+      i,
+      pos.getX(i) + nrm.getX(i) * ridge,
+      pos.getY(i) + nrm.getY(i) * ridge,
+      pos.getZ(i) + nrm.getZ(i) * ridge,
+    );
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function bentPlane(w, h, bend) {
+  const bow = bend || 0;
+  const geo = new THREE.PlaneGeometry(w, h, bow ? 8 : 1, bow ? 6 : 1);
+  if (!bow) return geo;
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i += 1) {
+    const u = pos.getX(i) / (w * 0.5);
+    const v = pos.getY(i) / (h * 0.5);
+    pos.setZ(i, bow * ((1 - u * u) * 0.62 + (1 - v * v) * 0.38));
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 export async function createDesign(renderer, { reduce, projects }) {
@@ -518,7 +695,12 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf6f1e8);
+  scene.background = new THREE.Color(0xece7df);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.16;
+  pmrem.dispose();
+
   const camera = new THREE.PerspectiveCamera(32, 1, 0.08, 80);
   const camTarget = new THREE.Vector3();
   const lookTarget = new THREE.Vector3();
@@ -527,61 +709,131 @@ export async function createDesign(renderer, { reduce, projects }) {
   const lookFrom = new THREE.Vector3();
   const lookTo = new THREE.Vector3();
   const lookNow = new THREE.Vector3(1.2, 2.8, 8);
+  const gradeSaved = {
+    toneMapping: renderer.toneMapping,
+    exposure: renderer.toneMappingExposure,
+    shadowType: renderer.shadowMap.type,
+    autoUpdate: renderer.shadowMap.autoUpdate,
+  };
+  let graded = false;
+  let suspended = false;
+  let shadowWarm = 0;
 
-  scene.add(new THREE.HemisphereLight(0xfff8f1, 0xe7dccb, 0.42));
-  scene.add(new THREE.AmbientLight(0xfff4ea, 0.22));
-  const sun = new THREE.DirectionalLight(0xfff1e0, 2.4);
-  sun.position.set(-16, 4.8, 2.6);
-  sun.target.position.set(0.6, 2.9, 0);
+  function shadowSize() {
+    const w = renderer.domElement.width || 1280;
+    const h = renderer.domElement.height || 720;
+    return w * h < 1100 * 800 ? 1024 : 2048;
+  }
+
+  scene.add(new THREE.HemisphereLight(0xf7f4ef, 0xe9e2d8, 1.25));
+  scene.add(new THREE.AmbientLight(0xf6f1ea, 0.42));
+  const sun = new THREE.DirectionalLight(0xfff6f0, 0.85);
+  sun.position.set(-11, 12, 16);
+  sun.target.position.set(0.6, 2.8, 0);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -16;
-  sun.shadow.camera.right = 16;
-  sun.shadow.camera.top = 12;
-  sun.shadow.camera.bottom = -10;
-  sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far = 40;
-  sun.shadow.bias = -0.00035;
-  sun.shadow.normalBias = 0.004;
-  sun.shadow.radius = 3.2;
+  sun.shadow.mapSize.set(shadowSize(), shadowSize());
+  sun.shadow.camera.left = -12;
+  sun.shadow.camera.right = 12;
+  sun.shadow.camera.top = 11;
+  sun.shadow.camera.bottom = -6;
+  sun.shadow.camera.near = 2;
+  sun.shadow.camera.far = 46;
+  sun.shadow.bias = -0.00022;
+  sun.shadow.normalBias = 0.008;
+  sun.shadow.radius = 8;
   scene.add(sun, sun.target);
 
-  const flat = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, toneMapped: false, ...extra });
-  const wallMat = flat(0xf6f1e8);
-  const metalMat = flat(0x6f6a64);
-  const twineMat = flat(0xc49a62);
-  const kraftMat = flat(0xc4a574);
-  const kraftDark = flat(0xa8885c);
-  const paperMat = flat(0xfffdf9, { shadowSide: THREE.DoubleSide });
+  const windowLight = new THREE.SpotLight(0xfff6f0, 55, 50, 0.92, 0.48, 1);
+  windowLight.position.set(-7.5, 10.5, 9.2);
+  windowLight.target.position.set(1.4, 2.6, 0);
+  windowLight.map = windowCookie();
+  windowLight.castShadow = false;
+  scene.add(windowLight, windowLight.target);
+
+  const plaster = plasterTextures(renderer);
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xe5dfd6,
+    emissiveIntensity: 0.22,
+    map: plaster.colorTex,
+    roughnessMap: plaster.roughTex,
+    normalMap: plaster.normalTex,
+    normalScale: new THREE.Vector2(0.42, 0.42),
+    roughness: 0.94,
+    metalness: 0,
+    envMapIntensity: 0.08,
+  });
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: 0x8d8983,
+    roughness: 0.36,
+    metalness: 0.84,
+    envMapIntensity: 0.7,
+  });
+  const twineMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: juteTextures(renderer),
+    roughness: 1,
+    metalness: 0,
+    envMapIntensity: 0,
+  });
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0xd2ae74,
+    map: woodTexture(renderer),
+    roughness: 0.74,
+    metalness: 0,
+    envMapIntensity: 0.18,
+  });
+  const kraftMap = kraftTexture(renderer);
+  const kraftMat = new THREE.MeshStandardMaterial({
+    map: kraftMap,
+    color: 0xc4a574,
+    roughness: 0.9,
+    metalness: 0,
+    shadowSide: THREE.DoubleSide,
+    envMapIntensity: 0.12,
+  });
+  const kraftDark = new THREE.MeshStandardMaterial({
+    map: kraftMap,
+    color: 0xa8885c,
+    roughness: 0.88,
+    metalness: 0,
+    shadowSide: THREE.DoubleSide,
+    envMapIntensity: 0.12,
+  });
+  const paperMat = new THREE.MeshStandardMaterial({
+    color: 0xfffdf8,
+    roughness: 0.92,
+    metalness: 0,
+    emissive: 0xf3eee6,
+    emissiveIntensity: 0.12,
+    shadowSide: THREE.DoubleSide,
+    envMapIntensity: 0.06,
+  });
+  const filmMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1816,
+    roughness: 0.42,
+    metalness: 0.18,
+    shadowSide: THREE.DoubleSide,
+    envMapIntensity: 0.45,
+  });
   const holes = sprocketTexture(renderer);
   const visitMap = visitTexture(renderer);
 
+  function photoMat(map, extra = {}) {
+    return new THREE.MeshStandardMaterial({
+      map,
+      roughness: 0.84,
+      metalness: 0,
+      envMapIntensity: 0.22,
+      shadowSide: THREE.DoubleSide,
+      ...extra,
+    });
+  }
+
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(46, 28), wallMat);
   wall.position.set(0, 3.1, 0);
+  wall.receiveShadow = true;
   scene.add(wall);
-  const catcher = new THREE.Mesh(
-    new THREE.PlaneGeometry(46, 28),
-    new THREE.ShadowMaterial({ color: 0x3a332b, opacity: 0.5, transparent: true, depthWrite: false, toneMapped: false }),
-  );
-  catcher.position.set(0, 3.1, 0.02);
-  catcher.receiveShadow = true;
-  catcher.renderOrder = 1;
-  scene.add(catcher);
-
-  const panes = new THREE.Mesh(
-    new THREE.PlaneGeometry(32, 20),
-    new THREE.MeshBasicMaterial({
-      map: makeTexture(windowLightTexture(), renderer),
-      transparent: true,
-      depthWrite: false,
-      toneMapped: false,
-      opacity: 0.3,
-    }),
-  );
-  panes.position.set(0.4, 3.05, 0.032);
-  panes.rotation.z = -0.22;
-  panes.renderOrder = 2;
-  scene.add(panes);
 
   const hookShape = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0.034, 0),
@@ -592,7 +844,12 @@ export async function createDesign(renderer, { reduce, projects }) {
     new THREE.Vector3(-0.012, -0.03, 0),
     new THREE.Vector3(0.004, -0.04, 0),
   ]);
-  const hookGeo = new THREE.TubeGeometry(hookShape, 16, 0.0055, 5, false);
+  const hookGeo = new THREE.TubeGeometry(hookShape, 16, 0.006, 6, false);
+  const pegHalfGeo = new THREE.BoxGeometry(0.016, 0.12, 0.011);
+  const pegSpringGeo = new THREE.TorusGeometry(0.012, 0.0026, 6, 12);
+  const knotGeo = new THREE.TorusGeometry(0.02, 0.0045, 5, 10);
+  const eyeGeo = new THREE.TorusGeometry(0.072, 0.011, 8, 18);
+  const screwGeo = new THREE.CylinderGeometry(0.009, 0.006, 0.05, 6);
 
   function addSHook(parent, y) {
     const hook = new THREE.Mesh(hookGeo, metalMat);
@@ -601,19 +858,47 @@ export async function createDesign(renderer, { reduce, projects }) {
     parent.add(hook);
   }
 
+  function addPeg(parent, y) {
+    const peg = new THREE.Group();
+    const left = new THREE.Mesh(pegHalfGeo, woodMat);
+    left.position.set(-0.009, 0.028, 0.006);
+    left.rotation.z = 0.12;
+    const right = new THREE.Mesh(pegHalfGeo, woodMat);
+    right.position.set(0.009, 0.028, 0.006);
+    right.rotation.z = -0.12;
+    const spring = new THREE.Mesh(pegSpringGeo, metalMat);
+    spring.rotation.x = Math.PI / 2;
+    spring.position.set(0, 0.012, 0.008);
+    left.castShadow = true;
+    right.castShadow = true;
+    spring.castShadow = true;
+    peg.add(left, right, spring);
+    peg.position.y = y;
+    parent.add(peg);
+  }
+
   function addDrop(parent, y0, length, sway) {
     const pts = [];
-    const steps = 5;
+    const steps = 6;
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
-      pts.push(new THREE.Vector3(Math.sin(t * Math.PI) * sway, y0 - t * length, 0.004));
+      pts.push(new THREE.Vector3(Math.sin(t * Math.PI) * sway, y0 - t * length, 0.008));
     }
     const mesh = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 6, 0.0036, 4, false),
+      fibreTube(new THREE.CatmullRomCurve3(pts), 8, 0.0042, 5),
       twineMat,
     );
     mesh.castShadow = true;
     parent.add(mesh);
+  }
+
+  function addKnot(parent, x, y, z) {
+    const knot = new THREE.Mesh(knotGeo, twineMat);
+    knot.rotation.y = Math.PI / 2;
+    knot.rotation.z = 0.5;
+    knot.position.set(x, y, z);
+    knot.castShadow = true;
+    parent.add(knot);
   }
 
   function addString(rowY) {
@@ -624,22 +909,23 @@ export async function createDesign(renderer, { reduce, projects }) {
       pts.push(new THREE.Vector3(x, sagAt(x), 0));
     }
     const curve = new THREE.CatmullRomCurve3(pts);
-    const twine = new THREE.Mesh(new THREE.TubeGeometry(curve, 72, 0.02, 6, false), twineMat);
+    const twine = new THREE.Mesh(fibreTube(curve, 80, 0.008, 6), twineMat);
     twine.castShadow = true;
     twine.position.set(0, rowY, FRONT_Z);
     scene.add(twine);
     [-WALL_HALF, WALL_HALF].forEach((x) => {
       const hook = new THREE.Group();
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.012, 8, 20), metalMat);
+      const ring = new THREE.Mesh(eyeGeo, metalMat);
       ring.rotation.y = Math.PI / 2;
       ring.castShadow = true;
-      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.007, 0.045, 6), metalMat);
+      const screw = new THREE.Mesh(screwGeo, metalMat);
       screw.rotation.x = Math.PI / 2;
       screw.position.z = -0.02;
       screw.castShadow = true;
       hook.add(ring, screw);
       hook.position.set(x, rowY + sagAt(x), FRONT_Z);
       scene.add(hook);
+      addKnot(scene, x, rowY + sagAt(x), FRONT_Z);
     });
   }
 
@@ -659,7 +945,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       pts.push(new THREE.Vector3(x, y + sag, 0));
     }
     const mesh = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.011, 5, false),
+      fibreTube(new THREE.CatmullRomCurve3(pts), 28, 0.0055, 5),
       twineMat,
     );
     mesh.castShadow = true;
@@ -670,6 +956,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       ring.castShadow = true;
       ring.position.set(x, y, 0.004);
       parent.add(ring);
+      addKnot(parent, x, y, 0.01);
     });
   }
 
@@ -698,8 +985,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const lineVideos = [];
     let bottom = -0.15;
 
-    function plane(w, h, material) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+    function plane(w, h, material, bend = 0.008) {
+      const mesh = new THREE.Mesh(bentPlane(w, h, bend), material);
       mesh.castShadow = true;
       return mesh;
     }
@@ -734,8 +1021,16 @@ export async function createDesign(renderer, { reduce, projects }) {
         const screen = { video, canvas, ctx, tex, poster };
         lineVideos.push(screen);
         videos.push(screen);
-        const base = plane(piece.w, piece.h, flat(0x1c1a17, { shadowSide: THREE.DoubleSide }));
-        const barMat = new THREE.MeshBasicMaterial({ map: holes.clone(), fog: false, shadowSide: THREE.DoubleSide });
+        const base = plane(piece.w, piece.h, filmMat, 0.003);
+        const barMat = new THREE.MeshStandardMaterial({
+          map: holes.clone(),
+          roughness: 0.4,
+          metalness: 0.2,
+          transparent: true,
+          alphaTest: 0.4,
+          shadowSide: THREE.DoubleSide,
+          envMapIntensity: 0.4,
+        });
         barMat.map.wrapT = THREE.RepeatWrapping;
         barMat.map.repeat.y = Math.max(1, piece.h / 0.16);
         barMat.map.colorSpace = THREE.SRGBColorSpace;
@@ -750,7 +1045,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         const rightBar = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat2);
         rightBar.position.set(pictureW / 2 + bar / 2, 0, 0.002);
         rightBar.castShadow = true;
-        const pic = plane(pictureW, pictureH, new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }));
+        const pic = plane(pictureW, pictureH, photoMat(tex, { roughness: 0.28, metalness: 0.06, envMapIntensity: 0.55 }), 0.002);
         pic.position.z = 0.003;
         sheet.add(base, leftBar, rightBar, pic);
         return;
@@ -770,14 +1065,14 @@ export async function createDesign(renderer, { reduce, projects }) {
           tex.offset.y = 1 - repeatY;
           cluster.userData.scroll = { tex, top: 1 - repeatY };
         }
-        const shot = plane(shotW, shotH, new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }));
+        const shot = plane(shotW, shotH, photoMat(tex, { roughness: 0.72 }), 0.004);
         shot.position.set(0, 0.01, 0.003);
         sheet.add(mount, shot);
         return;
       }
       if (piece.style === 'collage') {
         const tex = makeTexture(collageSheet(piece.items.map((item) => item.image).filter(Boolean), piece.note), renderer);
-        sheet.add(plane(piece.w, piece.h, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide })));
+        sheet.add(plane(piece.w, piece.h, photoMat(tex)));
         return;
       }
       if (piece.style === 'folder') {
@@ -789,7 +1084,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         sheet.add(back, flap, slip);
         if (piece.image) {
           const tex = makeTexture(piece.image, renderer);
-          const pic = plane(piece.w * 0.62, piece.h * 0.42, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide }));
+          const pic = plane(piece.w * 0.62, piece.h * 0.42, photoMat(tex), 0.003);
           pic.position.set(0.012, piece.h * 0.2, 0.005);
           sheet.add(pic);
         }
@@ -808,17 +1103,14 @@ export async function createDesign(renderer, { reduce, projects }) {
           }
         }
         geo.computeVertexNormals();
-        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-          map: makeTexture(piece.image, renderer),
-          shadowSide: THREE.DoubleSide,
-        }));
+        const mesh = new THREE.Mesh(geo, photoMat(makeTexture(piece.image, renderer), { roughness: 0.8 }));
         mesh.castShadow = true;
         sheet.add(mesh);
         return;
       }
       if (piece.style === 'burnt' || piece.style === 'cyan') {
         const tex = makeTexture(photoCard(piece.image, piece.style), renderer);
-        sheet.add(plane(piece.w, piece.h, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide })));
+        sheet.add(plane(piece.w, piece.h, photoMat(tex, { roughness: piece.style === 'cyan' ? 0.7 : 0.86 })));
         return;
       }
       const mount = plane(piece.w, piece.h, paperMat);
@@ -827,9 +1119,9 @@ export async function createDesign(renderer, { reduce, projects }) {
         const pic = plane(
           piece.photoW,
           piece.photoH,
-          new THREE.MeshBasicMaterial({ map: makeTexture(piece.image, renderer), shadowSide: THREE.DoubleSide }),
+          photoMat(makeTexture(piece.image, renderer)),
         );
-        pic.position.set(0, piece.h * 0.04, 0.003);
+        pic.position.set(0, 0, 0.004);
         sheet.add(pic);
       }
     }
@@ -865,32 +1157,28 @@ export async function createDesign(renderer, { reduce, projects }) {
       return pivot.position.y + low;
     }
 
-    const heroStyles = ['print', 'curl', 'burnt', 'print', 'cyan', 'curl'];
-    const heroStyle = entry.cover ? heroStyles[index % heroStyles.length] : 'print';
     const heroRnd = hash(index + 29);
-    const heroSize = unitSize(heroStyle, entry.cover || { aspect: 1 });
-    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 1.7 : 2.15;
-    const printW = heroSize.w * heroScale;
-    const printH = heroSize.h * heroScale;
-    const matW = Math.max(printW + 0.12, 1.28);
-    const matH = Math.max(printH + 0.14, 1.48);
+    const aspect = Math.max(0.72, Math.min(entry.cover?.aspect || 1, 1.35));
+    const printH = 1.05;
+    const printW = printH * aspect;
+    const margin = 0.065;
     const hero = {
-      style: heroStyle,
+      style: 'print',
       image: entry.cover?.image || null,
       kind: 'image',
       items: entry.cover ? [entry.cover] : [],
       w: printW,
       h: printH,
-      matW,
-      matH,
-      photoW: (heroSize.photoW || heroSize.w * 0.82) * heroScale,
-      photoH: (heroSize.photoH || heroSize.h * 0.78) * heroScale,
+      photoW: printW * (1 - margin * 2),
+      photoH: printH * (1 - margin * 2),
     };
+    const matW = printW;
+    const matH = printH;
     const heroDrop = 0.06 + heroRnd() * 0.2;
     const heroPivot = new THREE.Group();
     heroPivot.position.set(0, sagAt(home.x), 0.02);
     heroPivot.rotation.z = (heroRnd() - 0.5) * 0.06;
-    addSHook(heroPivot, 0.01);
+    addPeg(heroPivot, 0.012);
     addDrop(heroPivot, -0.03, heroDrop, (heroRnd() - 0.5) * 0.015);
     const heroTopLocal = -(0.03 + heroDrop);
     const heroLow = hang(heroPivot, hero, heroTopLocal);
@@ -903,8 +1191,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const backGroup = new THREE.Group();
     lineGroup.add(backGroup);
 
-    const maskW = Math.max(0.5, matW * 0.56);
-    const maskH = Math.max(0.54, matH * 0.56);
+    const maskW = Math.max(0.72, matW * 0.9);
+    const maskH = Math.max(0.74, matH * 0.9);
     const laid = layoutPieces(
       entry.content,
       index * 19 + 4,
@@ -937,13 +1225,15 @@ export async function createDesign(renderer, { reduce, projects }) {
         addSHook(pivot, 0.01);
         addDrop(pivot, -0.03, laid.tagDrop, 0.01);
         const tag = new THREE.Mesh(
-          new THREE.PlaneGeometry(laid.tagW, laid.tagH),
-          new THREE.MeshBasicMaterial({
+          bentPlane(laid.tagW, laid.tagH, 0.006),
+          new THREE.MeshStandardMaterial({
             map: tagTexture(entry.project, renderer),
             transparent: true,
-            opacity: 0.92,
-            alphaTest: 0.35,
-            toneMapped: false,
+            opacity: 0.86,
+            alphaTest: 0.12,
+            roughness: 0.72,
+            metalness: 0,
+            envMapIntensity: 0.08,
             shadowSide: THREE.DoubleSide,
           }),
         );
@@ -961,8 +1251,8 @@ export async function createDesign(renderer, { reduce, projects }) {
           addSHook(pivot, visitTop + 0.008);
           addDrop(pivot, visitTop - 0.01, visitDrop, -0.006);
           const visit = new THREE.Mesh(
-            new THREE.PlaneGeometry(Math.min(0.42, laid.tagW), visitH),
-            new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
+            bentPlane(Math.min(0.42, laid.tagW), visitH, 0.004),
+            photoMat(visitMap, { roughness: 0.9, envMapIntensity: 0.08 }),
           );
           visit.position.y = visitTop - 0.01 - visitDrop - visitH / 2;
           visit.castShadow = true;
@@ -980,7 +1270,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const contentCy = (cMinY + cMaxY) / 2;
     const fit = Math.min(1.45, (maskW * 0.98) / contentW, (maskH * 0.98) / contentH);
     backGroup.scale.setScalar(fit);
-    backGroup.position.set(-contentCx * fit, coverY - contentCy * fit, -DEPTH);
+    const reveal = home.x >= 0 ? 0.06 : -0.06;
+    backGroup.position.set(-contentCx * fit + reveal, coverY - contentCy * fit, -DEPTH);
     backGroup.traverse((obj) => {
       if (obj.isMesh) obj.castShadow = false;
     });
@@ -991,6 +1282,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     lines.push({
       project: entry.project,
       group: lineGroup,
+      coverSheet: heroPivot.children[heroPivot.children.length - 1],
       backGroup,
       pivots,
       videos: lineVideos,
@@ -1041,7 +1333,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       minY = Math.min(minY, line.home.y + line.heroBottom);
       maxY = Math.max(maxY, line.home.y + line.heroTop + 0.12);
     });
-    poseFov = narrow ? 26 : 20;
+    poseFov = narrow ? 34 : 28;
     fitPose(
       -WALL_HALF - 0.25,
       WALL_HALF + 0.25,
@@ -1049,17 +1341,124 @@ export async function createDesign(renderer, { reduce, projects }) {
       maxY + (narrow ? 0.2 : 0.3),
       FRONT_Z,
       narrow ? 0.86 : 0.82,
-      0,
+      narrow ? 0.035 : 0.05,
     );
   }
 
+  const probeCam = camera.clone();
+  const probeCorner = new THREE.Vector3();
+  const frameX = 0.92;
+  const frameY0 = -0.78;
+  const frameY1 = 0.8;
+
+  function projectBounds(box, cam) {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          probeCorner.set(x, y, z).project(cam);
+          x0 = Math.min(x0, probeCorner.x);
+          x1 = Math.max(x1, probeCorner.x);
+          y0 = Math.min(y0, probeCorner.y);
+          y1 = Math.max(y1, probeCorner.y);
+        }
+      }
+    }
+    return { x0, x1, y0, y1 };
+  }
+
+  function inFrame(rect) {
+    return rect.x0 >= -frameX && rect.x1 <= frameX && rect.y0 >= frameY0 && rect.y1 <= frameY1;
+  }
+
+  function frameOverlap(rect) {
+    const x0 = Math.max(rect.x0, -1);
+    const x1 = Math.min(rect.x1, 1);
+    const y0 = Math.max(rect.y0, -1);
+    const y1 = Math.min(rect.y1, 1);
+    if (x1 <= x0 || y1 <= y0) return 0;
+    return (x1 - x0) * (y1 - y0);
+  }
+
+  function sideGap(a, b) {
+    if (a.x1 <= b.x0) return b.x0 - a.x1;
+    if (b.x1 <= a.x0) return a.x0 - b.x1;
+    return -(Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
+  }
+
   function focusPose(line) {
-    const sign = line.home.x >= 0 ? 1 : -1;
-    const orbit = narrow ? ORBIT * 0.82 : ORBIT;
-    const dist = narrow ? FOCUS_DIST * 0.92 : FOCUS_DIST;
-    poseFov = narrow ? 26 : 21;
-    camTarget.set(line.home.x + sign * orbit, line.coverY + 0.02, FRONT_Z + dist);
-    lookTarget.set(line.home.x + sign * 0.78, line.coverY, FRONT_Z - DEPTH * 0.5);
+    const outward = line.home.x >= 0 ? 1 : -1;
+    const inward = -outward;
+    const packs = lines.map((item) => ({
+      cover: new THREE.Box3().setFromObject(item.coverSheet),
+      back: item.backGroup.children.length ? new THREE.Box3().setFromObject(item.backGroup) : null,
+    }));
+    const index = lines.indexOf(line);
+    const mine = packs[index];
+    const spanMin = Math.min(mine.cover.min.y, mine.back ? mine.back.min.y : mine.cover.min.y);
+    const spanMax = Math.max(mine.cover.max.y, mine.back ? mine.back.max.y : mine.cover.max.y);
+    const midY = (spanMin + spanMax) / 2;
+    const lookZ = mine.back ? (mine.cover.max.z + mine.back.min.z) * 0.5 : mine.cover.max.z;
+    let best = null;
+    const fovs = narrow ? [38, 42, 46] : [32, 36, 40];
+    const dists = narrow ? [1.5, 1.9, 2.4] : [1.6, 2.0, 2.4];
+    const orbits = narrow ? [1.8, 2.4, 3.0] : [2.6, 3.2, 3.8];
+    const looks = [0.2, 0.45, 0.75];
+    fovs.forEach((fov) => {
+      dists.forEach((dist) => {
+        orbits.forEach((orbit) => {
+          looks.forEach((look) => {
+            const camX = line.home.x + inward * orbit;
+            if (Math.abs(camX) > WALL_HALF - 0.45) return;
+            probeCam.fov = fov;
+            probeCam.aspect = camera.aspect;
+            probeCam.updateProjectionMatrix();
+            probeCam.position.set(camX, midY, FRONT_Z + dist);
+            probeCam.lookAt(line.home.x + inward * look, midY, lookZ);
+            probeCam.updateMatrixWorld();
+            const cover = projectBounds(mine.cover, probeCam);
+            const back = mine.back ? projectBounds(mine.back, probeCam) : null;
+            if (!inFrame(cover) || cover.x1 - cover.x0 < 0.26) return;
+            if (back && (!inFrame(back) || back.x1 - back.x0 < 0.2)) return;
+            const gap = back ? sideGap(cover, back) : 0.08;
+            if (back && (gap < 0.02 || gap > 0.16)) return;
+            const union = back
+              ? Math.max(cover.x1, back.x1) - Math.min(cover.x0, back.x0)
+              : cover.x1 - cover.x0;
+            if (union < 0.66 || union > 0.86) return;
+            let intrude = 0;
+            packs.forEach((other, otherIndex) => {
+              if (otherIndex === index) return;
+              intrude += frameOverlap(projectBounds(other.cover, probeCam));
+              if (other.back) intrude += frameOverlap(projectBounds(other.back, probeCam));
+            });
+            if (intrude > 0.025) return;
+            const ratio = back ? (back.x1 - back.x0) / Math.max(0.01, cover.x1 - cover.x0) : 1;
+            const score = -Math.abs(union - 0.76) - Math.abs(gap - 0.05) * 0.5 - Math.abs(ratio - 0.85) * 0.35 - intrude;
+            if (!best || score > best.score) {
+              best = {
+                score,
+                fov,
+                cam: probeCam.position.clone(),
+                look: new THREE.Vector3(line.home.x + inward * look, midY, lookZ),
+              };
+            }
+          });
+        });
+      });
+    });
+    if (best) {
+      poseFov = best.fov;
+      camTarget.copy(best.cam);
+      lookTarget.copy(best.look);
+      return;
+    }
+    poseFov = narrow ? 42 : 36;
+    camTarget.set(line.home.x + inward * 3.2, midY, FRONT_Z + 1.9);
+    lookTarget.set(line.home.x + inward * 0.35, midY, lookZ);
   }
 
   function paintPoster(screen) {
@@ -1104,6 +1503,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       line.swingStart = i === focus && !snap && !reduce ? performance.now() : -1;
     });
     syncMedia();
+    shadowWarm = 3;
     if (snap || reduce) {
       moving = false;
       lines.forEach((line) => {
@@ -1136,12 +1536,51 @@ export async function createDesign(renderer, { reduce, projects }) {
     camera.aspect = w / Math.max(1, h);
     camera.fov = narrow ? 40 : 32;
     camera.updateProjectionMatrix();
+    const size = shadowSize();
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.mapSize.set(size, size);
+      shadowWarm = 3;
+    }
     aim(slot, true);
+  }
+
+  function gradeOn() {
+    if (suspended) return;
+    renderer.toneMapping = THREE.AgXToneMapping;
+    renderer.toneMappingExposure = 2.15;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    if (!graded) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowWarm = 6;
+    }
+    graded = true;
+  }
+
+  function gradeOff() {
+    suspended = true;
+    if (!graded) return;
+    renderer.toneMapping = gradeSaved.toneMapping;
+    renderer.toneMappingExposure = gradeSaved.exposure;
+    renderer.shadowMap.type = gradeSaved.shadowType;
+    renderer.shadowMap.autoUpdate = gradeSaved.autoUpdate;
+    renderer.shadowMap.needsUpdate = true;
+    graded = false;
+  }
+
+  function resume() {
+    suspended = false;
+    gradeOn();
   }
 
   function update(dt, now) {
     const time = now || performance.now();
-    if (document.hidden) pause();
+    if (document.hidden) {
+      videos.forEach((screen) => screen.video.pause());
+      return;
+    }
+    if (suspended) return;
+    gradeOn();
     let e = 1;
     let apply = false;
     if (moving && !reduce) {
@@ -1151,6 +1590,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       if (t >= 1) moving = false;
     }
     const focus = slot - 1;
+    let swinging = false;
     lines.forEach((line, i) => {
       const on = i === focus;
       line.pivots.forEach((pivot, k) => {
@@ -1159,6 +1599,7 @@ export async function createDesign(renderer, { reduce, projects }) {
           const st = (time - line.swingStart) / 1000 - k * 0.05;
           if (st > 0) target = -0.28 * Math.sin(st * 4) * Math.exp(-1.25 * st);
         }
+        if (Math.abs(target) > 0.001) swinging = true;
         if (reduce || on) pivot.rotation.x = target;
         else pivot.rotation.x += (0 - pivot.rotation.x) * Math.min(1, (dt || 0.016) * 6);
       });
@@ -1185,6 +1626,10 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookNow.lerpVectors(lookFrom, lookTo, e);
     }
     camera.lookAt(lookNow);
+    if (moving || swinging || shadowWarm > 0) {
+      renderer.shadowMap.needsUpdate = true;
+      if (shadowWarm > 0) shadowWarm -= 1;
+    }
   }
 
   function step(dir) {
@@ -1221,6 +1666,14 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   function pause() {
     videos.forEach((screen) => screen.video.pause());
+    gradeOff();
+  }
+
+  function render(gl) {
+    gradeOn();
+    if (suspended) gradeOff();
+    gl.setRenderTarget(null);
+    gl.render(scene, camera);
   }
 
   aim(0, true);
@@ -1229,6 +1682,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     camera,
     resize,
     update,
+    render,
+    resume,
     step,
     pointerDown,
     pointerMove,
