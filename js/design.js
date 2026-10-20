@@ -1,22 +1,18 @@
 import * as THREE from 'three';
 
 // Design is one off-white wall. Twine lines run across it in even rows, each
-// with a gentle sag and a screw-eye at either end. Two projects share a row
-// when there are more projects than rows. The chosen project's prints come
-// forward and enlarge; they swing once on their pegs and settle. The other
-// projects stay on the wall under a white veil. The camera eases with that move.
+// with a gentle sag and a screw-eye at either end. Pieces hang from S-hooks
+// on short drops of different lengths, and some hang from the sheet above.
+// The chosen project's line comes forward and enlarges; the pieces swing once
+// and settle. The others stay on the wall under a white veil.
 
 const WALL_HALF = 5.2;
 const SAG = 0.22;
-const ROW_PITCH = 1.32;
-const TOP_Y = 5.75;
+const ROW_PITCH = 1.52;
+const TOP_Y = 6.15;
 const SEG_X = 2.56;
-const TAG_W = 0.5;
-const TAG_H = 0.64;
-const TAG_GAP = 0.07;
-const TAG_EXTRA = TAG_GAP + TAG_W;
-const MAX_W = 4.15;
-const MAX_H = 0.74;
+const MAX_W = 4.25;
+const COL_MAX = 1.18;
 const FOCUS_SCALE = 1.54;
 const FRONT_Z = 1.22;
 
@@ -110,20 +106,31 @@ function breakLines(g, text, maxW) {
 
 function tagTexture(project, renderer) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1280;
+  canvas.width = 900;
+  canvas.height = 1400;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#f7f1e8';
+  g.fillStyle = '#f4efe4';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = 'rgba(29,27,25,0.38)';
-  g.lineWidth = 6;
-  g.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
-  g.fillStyle = '#e7e0d6';
+  g.strokeStyle = 'rgba(90,70,48,0.08)';
+  g.lineWidth = 2;
+  for (let y = 40; y < canvas.height; y += 28) {
+    g.beginPath();
+    g.moveTo(36, y);
+    g.lineTo(canvas.width - 36, y + 4);
+    g.stroke();
+  }
+  g.globalCompositeOperation = 'destination-out';
   g.beginPath();
-  g.arc(canvas.width / 2, 58, 16, 0, Math.PI * 2);
+  g.arc(canvas.width / 2, 86, 26, 0, Math.PI * 2);
   g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = '#6f6a64';
+  g.lineWidth = 7;
+  g.beginPath();
+  g.arc(canvas.width / 2, 86, 26, 0, Math.PI * 2);
+  g.stroke();
 
-  let y = 150;
+  let y = 210;
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   if (project.year) {
@@ -135,7 +142,7 @@ function tagTexture(project, renderer) {
   if (project.title) {
     g.fillStyle = '#1d1b19';
     g.font = '500 88px Cormorant, serif';
-    breakLines(g, project.title, 860).slice(0, 3).forEach((row) => {
+    breakLines(g, project.title, 740).slice(0, 3).forEach((row) => {
       g.fillText(row, 78, y);
       y += 96;
     });
@@ -144,7 +151,7 @@ function tagTexture(project, renderer) {
   if (project.text) {
     g.fillStyle = '#1d1b19';
     g.font = '400 46px Inter, sans-serif';
-    breakLines(g, project.text, 860).slice(0, 6).forEach((row) => {
+    breakLines(g, project.text, 740).slice(0, 6).forEach((row) => {
       g.fillText(row, 78, y);
       y += 62;
     });
@@ -154,7 +161,7 @@ function tagTexture(project, renderer) {
   if (href) {
     g.fillStyle = '#5b554d';
     g.font = '400 34px Inter, sans-serif';
-    breakLines(g, href, 860).slice(0, 3).forEach((row) => {
+    breakLines(g, href, 740).slice(0, 3).forEach((row) => {
       g.fillText(row, 78, y);
       y += 46;
     });
@@ -208,57 +215,239 @@ function itemsOf(project) {
   return (project.images || []).map((src) => ({ kind: 'image', src }));
 }
 
-function layoutPieces(items, seed) {
-  if (!items.length) return { pieces: [], row: 0 };
-  const rnd = hash(seed);
-  const n = items.length;
-  const targetH = n >= 6 ? 0.5 : n >= 4 ? 0.58 : n === 1 ? 0.78 : 0.66;
-  const pieces = items.map((item) => {
-    const aspect = Math.max(0.2, item.aspect || 1);
-    const jitter = 0.9 + rnd() * 0.16;
-    const tilt = (rnd() - 0.5) * (item.kind === 'image' ? 0.11 : 0.03);
-    const gap = 0.03 + rnd() * 0.05;
-    let photoH = (item.kind === 'website' ? 0.96 : targetH) * jitter;
-    let photoW = item.kind === 'website' ? photoH * 0.6 : photoH * aspect;
-    let topMargin = 0;
-    let bottomMargin = 0;
-    let w = photoW;
-    let h = photoH;
-    if (item.kind === 'image') {
-      topMargin = photoH * 0.055;
-      const side = photoH * 0.05;
-      bottomMargin = photoH * 0.18;
-      w = photoW + side * 2;
-      h = photoH + topMargin + bottomMargin;
-    } else if (item.kind === 'video') {
-      w = photoW + photoH * 0.12;
-    }
-    return { ...item, w, h, photoW, photoH, topMargin, bottomMargin, tilt, gap, aspect };
-  });
-  let row = 0;
-  pieces.forEach((p, i) => { row += p.w + (i ? p.gap : 0); });
-  const tallest = Math.max(...pieces.map((p) => p.h));
-  const rowMax = Math.max(0.5, MAX_W - TAG_EXTRA);
-  const fit = Math.min(1, rowMax / Math.max(row, 0.01), MAX_H / Math.max(tallest, 0.01));
-  if (fit < 1) {
-    pieces.forEach((p) => {
-      p.w *= fit;
-      p.h *= fit;
-      p.photoW *= fit;
-      p.photoH *= fit;
-      p.topMargin *= fit;
-      p.bottomMargin *= fit;
-      p.gap *= fit;
-    });
-    row *= fit;
+function unitSize(style, item) {
+  const aspect = Math.max(0.45, Math.min(item?.aspect || 1, 1.7));
+  if (style === 'collage') return { w: 0.82, h: 0.6 };
+  if (style === 'folder') return { w: 0.5, h: 0.4 };
+  if (style === 'cyan') return { w: 0.3, h: 0.36 };
+  if (style === 'burnt') {
+    const h = 0.34;
+    return { w: h * Math.min(aspect, 1.15), h };
   }
-  let x = -row / 2;
-  pieces.forEach((p, i) => {
-    if (i) x += p.gap;
-    p.x = x + p.w / 2;
-    x += p.w;
+  if (style === 'curl') return { w: 0.4, h: 0.52 };
+  if (style === 'film') return { w: 0.32, h: 0.56 };
+  if (style === 'page') return { w: 0.48, h: 0.9 };
+  const photoH = 0.4;
+  const photoW = photoH * aspect;
+  return { w: photoW + 0.06, h: photoH + 0.08, photoW, photoH };
+}
+
+function layoutPieces(items, seed, note) {
+  const rnd = hash(seed);
+  const images = items.filter((it) => it.kind !== 'video' && it.kind !== 'website');
+  const videos = items.filter((it) => it.kind === 'video');
+  const pages = items.filter((it) => it.kind === 'website');
+  const pool = images.slice();
+  const units = [];
+  const push = (style, group) => {
+    const item = group[0];
+    const size = unitSize(style, item);
+    const jitter = style === 'page' ? 1 : 0.88 + rnd() * 0.24;
+    units.push({
+      style,
+      items: group,
+      image: item?.image || null,
+      poster: item?.poster || null,
+      src: item?.src,
+      kind: item?.kind || 'image',
+      aspect: item?.aspect,
+      shotAspect: item?.shotAspect,
+      w: size.w * jitter,
+      h: size.h * jitter,
+      photoW: (size.photoW || size.w * 0.82) * jitter,
+      photoH: (size.photoH || size.h * 0.78) * jitter,
+      note: style === 'collage' ? (note || '') : '',
+    });
+  };
+  if (images.length === 1 && !videos.length && !pages.length) {
+    push(['print', 'curl', 'burnt', 'cyan'][Math.floor(rnd() * 4)], pool.splice(0, 1));
+  } else if (pool.length >= 4) {
+    push('collage', pool.splice(0, 3));
+  }
+  ['burnt', 'cyan', 'curl', 'folder'].forEach((style) => {
+    if (pool.length) push(style, pool.splice(0, 1));
   });
-  return { pieces, row };
+  while (pool.length) push('print', pool.splice(0, 1));
+  videos.forEach((clip) => push('film', [clip]));
+  pages.forEach((page) => push('page', [page]));
+
+  const columns = [];
+  for (let i = 0; i < units.length; i += 1) {
+    const parent = units[i];
+    const next = units[i + 1];
+    const chain = Boolean(next)
+      && parent.style !== 'page'
+      && next.style !== 'page'
+      && next.style !== 'collage'
+      && (next.style === 'film' || next.style === 'cyan' || next.style === 'burnt' || (next.h < parent.h * 0.95 && rnd() < 0.65));
+    columns.push({
+      parent,
+      child: chain ? next : null,
+      drop: 0.05 + rnd() * (chain ? 0.14 : 0.24),
+      childDrop: chain ? 0.05 + rnd() * 0.08 : 0,
+      tilt: (rnd() - 0.5) * 0.08,
+      gap: 0.07 + rnd() * 0.1,
+      sway: (rnd() - 0.5) * 0.028,
+    });
+    if (chain) i += 1;
+  }
+
+  const tagW0 = 0.44;
+  const tagH0 = 0.76;
+  const tagGap0 = 0.09;
+  let row = tagGap0 + tagW0;
+  let tallest = tagH0 + 0.2;
+  columns.forEach((col, i) => {
+    col.w = Math.max(col.parent.w, col.child ? col.child.w : 0);
+    const h = col.drop + 0.06 + col.parent.h + (col.child ? col.childDrop + 0.05 + col.child.h : 0);
+    row += col.w + (i ? col.gap : 0);
+    tallest = Math.max(tallest, h);
+  });
+  const fit = Math.min(1, MAX_W / Math.max(row, 0.01), COL_MAX / Math.max(tallest, 0.01));
+  const scalePiece = (piece) => {
+    if (!piece) return;
+    piece.w *= fit;
+    piece.h *= fit;
+    piece.photoW *= fit;
+    piece.photoH *= fit;
+  };
+  columns.forEach((col) => {
+    col.w *= fit;
+    col.drop *= fit;
+    col.childDrop *= fit;
+    col.gap *= fit;
+    scalePiece(col.parent);
+    scalePiece(col.child);
+  });
+  row *= fit;
+  let x = -row / 2;
+  columns.forEach((col, i) => {
+    if (i) x += col.gap;
+    col.x = x + col.w / 2;
+    x += col.w;
+  });
+  const tagW = tagW0 * fit;
+  const tagH = tagH0 * fit;
+  const tagX = x + tagGap0 * fit + tagW / 2;
+  return {
+    columns,
+    row,
+    left: -row / 2,
+    right: row / 2,
+    tagX,
+    tagW,
+    tagH,
+    tagDrop: (0.08 + rnd() * 0.18) * fit,
+    tagTilt: (rnd() - 0.5) * 0.05,
+  };
+}
+
+function containDraw(g, image, x, y, w, h) {
+  const sw = image.width || image.naturalWidth || 1;
+  const sh = image.height || image.naturalHeight || 1;
+  const s = Math.min(w / sw, h / sh);
+  const dw = sw * s;
+  const dh = sh * s;
+  g.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
+function photoCard(image, style) {
+  const canvas = document.createElement('canvas');
+  const portrait = style === 'cyan';
+  canvas.width = portrait ? 720 : 860;
+  canvas.height = portrait ? 900 : 780;
+  const g = canvas.getContext('2d');
+  g.fillStyle = style === 'cyan' ? '#d7e2e6' : '#f3eadc';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  const m = 42;
+  if (image) containDraw(g, image, m, m, canvas.width - m * 2, canvas.height - m * 2);
+  if (style === 'cyan') {
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = 'rgba(32, 70, 88, 0.78)';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.globalCompositeOperation = 'source-over';
+    g.strokeStyle = 'rgba(236, 242, 240, 0.85)';
+    g.lineWidth = 16;
+    g.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+  } else {
+    g.globalCompositeOperation = 'multiply';
+    const edge = g.createRadialGradient(
+      canvas.width * 0.46, canvas.height * 0.42, canvas.width * 0.12,
+      canvas.width * 0.55, canvas.height * 0.55, canvas.width * 0.72,
+    );
+    edge.addColorStop(0.55, 'rgba(255,255,255,0)');
+    edge.addColorStop(0.82, 'rgba(120,72,40,0.15)');
+    edge.addColorStop(1, 'rgba(48,24,12,0.92)');
+    g.fillStyle = edge;
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.fillStyle = 'rgba(36,18,10,0.9)';
+    g.beginPath();
+    g.moveTo(canvas.width * 0.72, canvas.height);
+    g.quadraticCurveTo(canvas.width * 0.84, canvas.height * 0.78, canvas.width, canvas.height * 0.58);
+    g.lineTo(canvas.width, canvas.height);
+    g.fill();
+    g.globalCompositeOperation = 'source-over';
+  }
+  return canvas;
+}
+
+function collageSheet(images, note) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 880;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#f3eee6';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = 'rgba(90,70,48,0.16)';
+  g.lineWidth = 4;
+  g.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
+  const slots = [[56, 64, 460, 320], [560, 48, 520, 360], [70, 430, 520, 300]];
+  images.slice(0, 3).forEach((image, i) => {
+    if (!image) return;
+    const [x, y, w, h] = slots[i];
+    g.fillStyle = '#fffdf9';
+    g.fillRect(x - 14, y - 14, w + 28, h + 28);
+    containDraw(g, image, x, y, w, h);
+  });
+  ['#a8603f', '#2c2825', '#e4d3bc', '#c4a574'].forEach((color, i) => {
+    g.fillStyle = color;
+    g.fillRect(860, 500 + i * 78, 220, 58);
+  });
+  if (note) {
+    g.save();
+    g.translate(620, 760);
+    g.rotate(-0.05);
+    g.fillStyle = '#3a342c';
+    g.font = 'italic 500 46px Cormorant, serif';
+    breakLines(g, note, 460).slice(0, 2).forEach((line, i) => g.fillText(line, 0, i * 52));
+    g.restore();
+  }
+  return canvas;
+}
+
+function windowLightTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = 'rgba(62, 48, 36, 0.55)';
+  g.lineWidth = 26;
+  g.shadowColor = 'rgba(62, 48, 36, 0.4)';
+  g.shadowBlur = 22;
+  for (let x = 80; x < 1024; x += 236) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, 1024);
+    g.stroke();
+  }
+  for (let y = 70; y < 1024; y += 210) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(1024, y);
+    g.stroke();
+  }
+  return canvas;
 }
 
 export async function createDesign(renderer, { reduce, projects }) {
@@ -315,14 +504,13 @@ export async function createDesign(renderer, { reduce, projects }) {
   sun.shadow.radius = 3.2;
   scene.add(sun, sun.target);
 
-  const flat = (color) => new THREE.MeshBasicMaterial({ color, toneMapped: false });
+  const flat = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, toneMapped: false, ...extra });
   const wallMat = flat(0xf6f1e8);
-  const woodMat = flat(0xe4cfae);
-  const springMat = flat(0xb08968);
   const metalMat = flat(0x6f6a64);
   const twineMat = flat(0xc49a62);
-  const paperMat = flat(0xfffdf9);
-  paperMat.shadowSide = THREE.DoubleSide;
+  const kraftMat = flat(0xc4a574);
+  const kraftDark = flat(0xa8885c);
+  const paperMat = flat(0xfffdf9, { shadowSide: THREE.DoubleSide });
   const holes = sprocketTexture(renderer);
   const visitMap = visitTexture(renderer);
 
@@ -338,24 +526,52 @@ export async function createDesign(renderer, { reduce, projects }) {
   catcher.renderOrder = 1;
   scene.add(catcher);
 
-  const pegBody = new THREE.BoxGeometry(0.015, 0.092, 0.016);
-  const pegSpring = new THREE.TorusGeometry(0.012, 0.0032, 6, 10);
+  const panes = new THREE.Mesh(
+    new THREE.PlaneGeometry(32, 20),
+    new THREE.MeshBasicMaterial({
+      map: makeTexture(windowLightTexture(), renderer),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+      opacity: 0.3,
+    }),
+  );
+  panes.position.set(0.4, 3.05, 0.032);
+  panes.rotation.z = -0.22;
+  panes.renderOrder = 2;
+  scene.add(panes);
 
-  function addPeg(parent, x) {
-    const peg = new THREE.Group();
-    const leg = new THREE.Mesh(pegBody, woodMat);
-    leg.position.set(-0.009, -0.028, 0);
-    leg.castShadow = true;
-    const leg2 = new THREE.Mesh(pegBody, woodMat);
-    leg2.position.set(0.009, -0.028, 0);
-    leg2.castShadow = true;
-    const spring = new THREE.Mesh(pegSpring, springMat);
-    spring.rotation.y = Math.PI / 2;
-    spring.position.y = 0.008;
-    spring.castShadow = true;
-    peg.add(leg, leg2, spring);
-    peg.position.set(x, 0.012, 0.016);
-    parent.add(peg);
+  const hookShape = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0.034, 0),
+    new THREE.Vector3(0.02, 0.024, 0),
+    new THREE.Vector3(0.02, 0.006, 0),
+    new THREE.Vector3(0, -0.004, 0),
+    new THREE.Vector3(-0.016, -0.016, 0),
+    new THREE.Vector3(-0.012, -0.03, 0),
+    new THREE.Vector3(0.004, -0.04, 0),
+  ]);
+  const hookGeo = new THREE.TubeGeometry(hookShape, 16, 0.0055, 5, false);
+
+  function addSHook(parent, y) {
+    const hook = new THREE.Mesh(hookGeo, metalMat);
+    hook.position.y = y;
+    hook.castShadow = true;
+    parent.add(hook);
+  }
+
+  function addDrop(parent, y0, length, sway) {
+    const pts = [];
+    const steps = 5;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      pts.push(new THREE.Vector3(Math.sin(t * Math.PI) * sway, y0 - t * length, 0.004));
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 6, 0.0036, 4, false),
+      twineMat,
+    );
+    mesh.castShadow = true;
+    parent.add(mesh);
   }
 
   function addString(rowY) {
@@ -398,9 +614,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const cols = Math.min(2, prepared.length - row * 2);
     const segX = cols === 1 ? 0 : (col === 0 ? -SEG_X : SEG_X);
     const home = new THREE.Vector3(segX, TOP_Y - row * ROW_PITCH, 0.09);
-    const laid = layoutPieces(entry.items, index + 3);
-    const centerNudge = TAG_EXTRA / 2;
-    laid.pieces.forEach((piece) => { piece.x -= centerNudge; });
+    const laid = layoutPieces(entry.items, index + 3, entry.project.text || '');
     const lineGroup = new THREE.Group();
     const cluster = new THREE.Group();
     lineGroup.add(cluster);
@@ -409,27 +623,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     const lineVideos = [];
     let bottom = -0.15;
 
-    laid.pieces.forEach((piece, i) => {
-      const pivot = new THREE.Group();
-      const worldX = home.x + piece.x;
-      pivot.position.set(piece.x, sagAt(worldX), 0.012 + i * 0.004);
-      pivot.rotation.z = piece.tilt || 0;
-      const pegSpan = piece.w * 0.22;
-      if (piece.w > 0.72) {
-        addPeg(pivot, -pegSpan);
-        addPeg(pivot, pegSpan);
-      } else addPeg(pivot, 0);
+    function plane(w, h, material) {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+      mesh.castShadow = true;
+      return mesh;
+    }
 
-      const sheet = new THREE.Group();
-      sheet.position.y = -(0.04 + piece.h / 2);
-      pivot.add(sheet);
-      cluster.add(pivot);
-      pivots.push(pivot);
-      bottom = Math.min(bottom, pivot.position.y - 0.04 - piece.h);
-
-      if (piece.kind === 'video') {
-        const bar = Math.min(0.05, piece.w * 0.075);
+    function buildPiece(piece, sheet) {
+      if (piece.style === 'film') {
+        const bar = Math.min(0.045, piece.w * 0.16);
         const pictureW = Math.max(0.08, piece.w - bar * 2);
+        const pictureH = piece.h * 0.78;
         const canvas = document.createElement('canvas');
         const poster = piece.poster;
         const size = poster ? sourceSize(poster) : { w: 640, h: 360 };
@@ -455,9 +659,10 @@ export async function createDesign(renderer, { reduce, projects }) {
         const screen = { video, canvas, ctx, tex, poster };
         lineVideos.push(screen);
         videos.push(screen);
+        const base = plane(piece.w, piece.h, flat(0x1c1a17, { shadowSide: THREE.DoubleSide }));
         const barMat = new THREE.MeshBasicMaterial({ map: holes.clone(), fog: false, shadowSide: THREE.DoubleSide });
         barMat.map.wrapT = THREE.RepeatWrapping;
-        barMat.map.repeat.y = Math.max(1, piece.h / 0.18);
+        barMat.map.repeat.y = Math.max(1, piece.h / 0.16);
         barMat.map.colorSpace = THREE.SRGBColorSpace;
         const barMat2 = barMat.clone();
         barMat2.map = holes.clone();
@@ -465,74 +670,140 @@ export async function createDesign(renderer, { reduce, projects }) {
         barMat2.map.repeat.y = barMat.map.repeat.y;
         barMat2.map.colorSpace = THREE.SRGBColorSpace;
         const leftBar = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat);
-        leftBar.position.x = -(pictureW / 2 + bar / 2);
+        leftBar.position.set(-(pictureW / 2 + bar / 2), 0, 0.002);
         leftBar.castShadow = true;
         const rightBar = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat2);
-        rightBar.position.x = pictureW / 2 + bar / 2;
+        rightBar.position.set(pictureW / 2 + bar / 2, 0, 0.002);
         rightBar.castShadow = true;
-        const pic = new THREE.Mesh(
-          new THREE.PlaneGeometry(pictureW, piece.h),
-          new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }),
-        );
-        pic.castShadow = true;
-        sheet.add(leftBar, rightBar, pic);
-      } else if (piece.kind === 'website' && piece.image) {
-        const mount = new THREE.Mesh(new THREE.PlaneGeometry(piece.w, piece.h), paperMat);
-        mount.position.z = -0.004;
-        mount.castShadow = true;
-        const shotW = piece.w - 0.05;
-        const shotH = piece.h - 0.07;
+        const pic = plane(pictureW, pictureH, new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }));
+        pic.position.z = 0.003;
+        sheet.add(base, leftBar, rightBar, pic);
+        return;
+      }
+      if (piece.style === 'page' && piece.image) {
+        const mount = plane(piece.w, piece.h, paperMat);
+        const shotW = piece.w - 0.045;
+        const shotH = piece.h - 0.06;
         const tex = makeTexture(piece.image, renderer);
-        const shotAspect = piece.shotAspect || piece.aspect;
+        const shotAspect = piece.shotAspect || piece.aspect || 1;
         const frameAspect = shotW / shotH;
-        let scroll = null;
         if (shotAspect < frameAspect * 0.92) {
           const repeatY = Math.max(0.08, shotAspect / frameAspect);
           tex.wrapS = THREE.ClampToEdgeWrapping;
           tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.repeat.set(1, repeatY);
           tex.offset.y = 1 - repeatY;
-          scroll = { tex, top: 1 - repeatY };
+          cluster.userData.scroll = { tex, top: 1 - repeatY };
         }
-        const shot = new THREE.Mesh(
-          new THREE.PlaneGeometry(shotW, shotH),
-          new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }),
-        );
-        shot.position.y = 0.012;
-        shot.castShadow = true;
+        const shot = plane(shotW, shotH, new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }));
+        shot.position.set(0, 0.01, 0.003);
         sheet.add(mount, shot);
-        if (scroll) cluster.userData.scroll = scroll;
-      } else {
-        const mount = new THREE.Mesh(new THREE.PlaneGeometry(piece.w, piece.h), paperMat);
-        mount.castShadow = true;
-        sheet.add(mount);
+        return;
+      }
+      if (piece.style === 'collage') {
+        const tex = makeTexture(collageSheet(piece.items.map((item) => item.image).filter(Boolean), piece.note), renderer);
+        sheet.add(plane(piece.w, piece.h, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide })));
+        return;
+      }
+      if (piece.style === 'folder') {
+        const back = plane(piece.w, piece.h, kraftMat);
+        const flap = plane(piece.w * 0.92, piece.h * 0.22, kraftDark);
+        flap.position.set(0, piece.h * 0.38, 0.002);
+        const slip = plane(piece.w * 0.72, piece.h * 0.55, paperMat);
+        slip.position.set(0.01, piece.h * 0.16, 0.003);
+        sheet.add(back, flap, slip);
         if (piece.image) {
           const tex = makeTexture(piece.image, renderer);
-          const pic = new THREE.Mesh(
-            new THREE.PlaneGeometry(piece.photoW || piece.w, piece.photoH || piece.h),
-            new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide }),
-          );
-          const lift = ((piece.bottomMargin || 0) - (piece.topMargin || 0)) / 2;
-          pic.position.set(0, lift, 0.003);
-          pic.castShadow = true;
+          const pic = plane(piece.w * 0.62, piece.h * 0.42, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide }));
+          pic.position.set(0.012, piece.h * 0.2, 0.005);
           sheet.add(pic);
         }
+        return;
       }
+      if (piece.style === 'curl' && piece.image) {
+        const geo = new THREE.PlaneGeometry(piece.w, piece.h, 10, 1);
+        const pos = geo.attributes.position;
+        for (let v = 0; v < pos.count; v += 1) {
+          const x = pos.getX(v);
+          const u = x / (piece.w / 2);
+          if (u > 0.55) {
+            const t = (u - 0.55) / 0.45;
+            pos.setZ(v, Math.sin(t * Math.PI) * piece.w * 0.16);
+            pos.setX(v, x - t * t * piece.w * 0.12);
+          }
+        }
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          map: makeTexture(piece.image, renderer),
+          shadowSide: THREE.DoubleSide,
+        }));
+        mesh.castShadow = true;
+        sheet.add(mesh);
+        return;
+      }
+      if (piece.style === 'burnt' || piece.style === 'cyan') {
+        const tex = makeTexture(photoCard(piece.image, piece.style), renderer);
+        sheet.add(plane(piece.w, piece.h, new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide })));
+        return;
+      }
+      const mount = plane(piece.w, piece.h, paperMat);
+      sheet.add(mount);
+      if (piece.image) {
+        const pic = plane(
+          piece.photoW,
+          piece.photoH,
+          new THREE.MeshBasicMaterial({ map: makeTexture(piece.image, renderer), shadowSide: THREE.DoubleSide }),
+        );
+        pic.position.set(0, piece.h * 0.04, 0.003);
+        sheet.add(pic);
+      }
+    }
+
+    function hang(pivot, piece, topY) {
+      const sheet = new THREE.Group();
+      sheet.position.y = topY - piece.h / 2;
+      pivot.add(sheet);
+      buildPiece(piece, sheet);
+      return topY - piece.h;
+    }
+
+    laid.columns.forEach((col) => {
+      const pivot = new THREE.Group();
+      const worldX = home.x + col.x;
+      pivot.position.set(col.x, sagAt(worldX), 0.012);
+      pivot.rotation.z = col.tilt || 0;
+      addSHook(pivot, 0.01);
+      addDrop(pivot, -0.03, col.drop, col.sway);
+      let low = hang(pivot, col.parent, -(0.03 + col.drop));
+      if (col.child) {
+        addSHook(pivot, low + 0.01);
+        addDrop(pivot, low - 0.02, col.childDrop, col.sway * -0.6);
+        low = hang(pivot, col.child, low - 0.02 - col.childDrop);
+      }
+      cluster.add(pivot);
+      pivots.push(pivot);
+      bottom = Math.min(bottom, pivot.position.y + low);
     });
 
-    const tagW = TAG_W;
-    const tagH = TAG_H;
-    const tagX = laid.row / 2 + TAG_GAP + tagW / 2 - centerNudge;
+    const { tagW, tagH, tagX } = laid;
     const tagPivot = new THREE.Group();
     tagPivot.position.set(tagX, sagAt(home.x + tagX), 0.02);
-    tagPivot.rotation.z = (hash(index + 40)() - 0.5) * 0.05;
-    addPeg(tagPivot, 0);
+    tagPivot.rotation.z = laid.tagTilt || 0;
+    addSHook(tagPivot, 0.01);
+    addDrop(tagPivot, -0.03, laid.tagDrop, 0.012);
     const tag = new THREE.Mesh(
       new THREE.PlaneGeometry(tagW, tagH),
-      new THREE.MeshBasicMaterial({ map: tagTexture(entry.project, renderer), toneMapped: false, shadowSide: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({
+        map: tagTexture(entry.project, renderer),
+        transparent: true,
+        opacity: 0.9,
+        alphaTest: 0.35,
+        toneMapped: false,
+        shadowSide: THREE.DoubleSide,
+      }),
     );
     tag.castShadow = true;
-    tag.position.y = -(0.045 + tagH / 2);
+    tag.position.y = -(0.03 + laid.tagDrop + tagH / 2);
     tagPivot.add(tag);
     pivots.push(tagPivot);
     cluster.add(tagPivot);
@@ -540,12 +811,16 @@ export async function createDesign(renderer, { reduce, projects }) {
 
     const href = entry.project.links?.[0]?.href;
     if (href) {
-      const visitH = 0.2;
+      const visitH = 0.16;
+      const visitDrop = 0.05;
+      const visitTop = tag.position.y - tagH / 2;
+      addSHook(tagPivot, visitTop + 0.008);
+      addDrop(tagPivot, visitTop - 0.015, visitDrop, -0.01);
       const visit = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.5, visitH),
+        new THREE.PlaneGeometry(Math.min(0.42, tagW), visitH),
         new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
       );
-      visit.position.y = tag.position.y - tagH / 2 - 0.03 - visitH / 2;
+      visit.position.y = visitTop - 0.015 - visitDrop - visitH / 2;
       visit.castShadow = true;
       visit.userData.href = href;
       tagPivot.add(visit);
@@ -553,8 +828,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       bottom = Math.min(bottom, visit.position.y - visitH / 2);
     }
 
-    const left = -laid.row / 2 - centerNudge;
-    const right = tagX + tagW / 2;
+    const left = laid.left;
+    const right = laid.right;
     const veil = new THREE.Mesh(
       new THREE.PlaneGeometry(right - left + 0.28, -bottom + 0.18),
       new THREE.MeshBasicMaterial({
@@ -689,13 +964,13 @@ export async function createDesign(renderer, { reduce, projects }) {
     const y = line.front.y;
     const z = line.front.z;
     fitPose(
-      line.left * s - 0.34,
-      line.right * s + 0.36,
-      y + line.bottom * s - 0.1,
-      y + 0.12,
+      line.left * s - 0.5,
+      line.right * s + 0.55,
+      y + line.bottom * s - 0.26,
+      y + 0.34,
       z,
-      narrow ? 0.9 : 0.86,
-      narrow ? 0.04 : 0.1,
+      narrow ? 0.86 : 0.8,
+      narrow ? 0.04 : 0.08,
     );
   }
 
