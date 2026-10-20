@@ -1281,6 +1281,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     lines.push({
       project: entry.project,
       group: lineGroup,
+      coverSheet: heroPivot.children[heroPivot.children.length - 1],
       backGroup,
       pivots,
       videos: lineVideos,
@@ -1343,13 +1344,113 @@ export async function createDesign(renderer, { reduce, projects }) {
     );
   }
 
+  const probeCam = camera.clone();
+  const probeCorner = new THREE.Vector3();
+  const frameX = 0.92;
+  const frameY0 = -0.78;
+  const frameY1 = 0.8;
+
+  function projectBounds(box, cam) {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          probeCorner.set(x, y, z).project(cam);
+          x0 = Math.min(x0, probeCorner.x);
+          x1 = Math.max(x1, probeCorner.x);
+          y0 = Math.min(y0, probeCorner.y);
+          y1 = Math.max(y1, probeCorner.y);
+        }
+      }
+    }
+    return { x0, x1, y0, y1 };
+  }
+
+  function inFrame(rect) {
+    return rect.x0 >= -frameX && rect.x1 <= frameX && rect.y0 >= frameY0 && rect.y1 <= frameY1;
+  }
+
+  function frameOverlap(rect) {
+    const x0 = Math.max(rect.x0, -1);
+    const x1 = Math.min(rect.x1, 1);
+    const y0 = Math.max(rect.y0, -1);
+    const y1 = Math.min(rect.y1, 1);
+    if (x1 <= x0 || y1 <= y0) return 0;
+    return (x1 - x0) * (y1 - y0);
+  }
+
+  function sideGap(a, b) {
+    if (a.x1 <= b.x0) return b.x0 - a.x1;
+    if (b.x1 <= a.x0) return a.x0 - b.x1;
+    return -(Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
+  }
+
   function focusPose(line) {
     const sign = line.home.x >= 0 ? 1 : -1;
-    const orbit = narrow ? ORBIT * 0.82 : ORBIT;
-    const dist = narrow ? FOCUS_DIST * 0.92 : FOCUS_DIST;
-    poseFov = narrow ? 32 : 27;
-    camTarget.set(line.home.x + sign * orbit, line.coverY + 0.02, FRONT_Z + dist);
-    lookTarget.set(line.home.x + sign * 0.55, line.coverY, FRONT_Z - DEPTH * 0.5);
+    const packs = lines.map((item) => ({
+      cover: new THREE.Box3().setFromObject(item.coverSheet),
+      back: item.backGroup.children.length ? new THREE.Box3().setFromObject(item.backGroup) : null,
+    }));
+    const index = lines.indexOf(line);
+    const mine = packs[index];
+    const spanMin = Math.min(mine.cover.min.y, mine.back ? mine.back.min.y : mine.cover.min.y);
+    const spanMax = Math.max(mine.cover.max.y, mine.back ? mine.back.max.y : mine.cover.max.y);
+    const midY = (spanMin + spanMax) / 2;
+    const lookZ = mine.back ? (mine.cover.max.z + mine.back.min.z) * 0.5 : mine.cover.max.z;
+    let best = null;
+    const fovs = narrow ? [34, 38] : [28, 32];
+    const dists = narrow ? [2.2, 2.8, 3.4, 4.2] : [2.6, 3.2, 3.8, 4.6];
+    const orbits = narrow ? [2.2, 2.8, 3.6] : [2.8, 3.6, 4.4];
+    const looks = [0.45, 0.9, 1.45];
+    fovs.forEach((fov) => {
+      dists.forEach((dist) => {
+        orbits.forEach((orbit) => {
+          looks.forEach((look) => {
+            probeCam.fov = fov;
+            probeCam.aspect = camera.aspect;
+            probeCam.updateProjectionMatrix();
+            probeCam.position.set(line.home.x + sign * orbit, midY, FRONT_Z + dist);
+            probeCam.lookAt(line.home.x + sign * look, midY, lookZ);
+            probeCam.updateMatrixWorld();
+            const cover = projectBounds(mine.cover, probeCam);
+            const back = mine.back ? projectBounds(mine.back, probeCam) : null;
+            if (!inFrame(cover)) return;
+            if (back && !inFrame(back)) return;
+            const gap = back ? sideGap(cover, back) : 0.2;
+            if (back && gap < 0.045) return;
+            let intrude = 0;
+            packs.forEach((other, otherIndex) => {
+              if (otherIndex === index) return;
+              intrude += frameOverlap(projectBounds(other.cover, probeCam));
+              if (other.back) intrude += frameOverlap(projectBounds(other.back, probeCam));
+            });
+            if (intrude > 0.03) return;
+            const area = (cover.x1 - cover.x0) * (cover.y1 - cover.y0);
+            const score = area + Math.min(gap, 0.22) * 0.35 - intrude;
+            if (!best || score > best.score) {
+              best = {
+                score,
+                fov,
+                cam: probeCam.position.clone(),
+                look: new THREE.Vector3(line.home.x + sign * look, midY, lookZ),
+              };
+            }
+          });
+        });
+      });
+    });
+    if (best) {
+      poseFov = best.fov;
+      camTarget.copy(best.cam);
+      lookTarget.copy(best.look);
+      return;
+    }
+    poseFov = narrow ? 34 : 30;
+    camTarget.set(line.home.x + sign * (narrow ? 3 : 3.8), line.coverY, FRONT_Z + (narrow ? 3 : 3.4));
+    lookTarget.set(line.home.x + sign * 0.9, line.coverY, FRONT_Z - DEPTH * 0.5);
   }
 
   function paintPoster(screen) {
@@ -1648,7 +1749,13 @@ export async function createDesign(renderer, { reduce, projects }) {
     gl.setRenderTarget(dofTarget);
     gl.render(scene, camera);
     camera.updateMatrixWorld();
-    focusPt.copy(lookNow).project(camera);
+    const focusLine = slot > 0 ? lines[slot - 1] : null;
+    if (focusLine) {
+      focusLine.coverSheet.getWorldPosition(focusPt);
+      focusPt.project(camera);
+    } else {
+      focusPt.copy(lookNow).project(camera);
+    }
     dofMat.uniforms.focus.value = focusPt.z * 0.5 + 0.5;
     gl.setRenderTarget(null);
     gl.render(dofScene, dofCam);
