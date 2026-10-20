@@ -16,8 +16,8 @@ const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const FRONT_Z = 2.05;
 const DEPTH = 1.72;
-const ORBIT = 3.35;
-const FOCUS_DIST = 3.15;
+const ORBIT = 2.15;
+const FOCUS_DIST = 2.2;
 
 function hash(n) {
   let s = Math.imul(n + 1, 9973) >>> 0;
@@ -451,16 +451,16 @@ function windowCookie() {
   const g = canvas.getContext('2d');
   g.fillStyle = '#fff6e8';
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = '#2a241e';
-  g.lineWidth = 18;
+  g.strokeStyle = '#1c1814';
+  g.lineWidth = 26;
   g.lineCap = 'butt';
-  for (let x = 48; x < 512; x += 116) {
+  for (let x = 64; x < 512; x += 128) {
     g.beginPath();
     g.moveTo(x, 0);
     g.lineTo(x, 512);
     g.stroke();
   }
-  for (let y = 36; y < 512; y += 118) {
+  for (let y = 70; y < 512; y += 140) {
     g.beginPath();
     g.moveTo(0, y);
     g.lineTo(512, y);
@@ -725,9 +725,9 @@ export async function createDesign(renderer, { reduce, projects }) {
     return w * h < 1100 * 800 ? 1024 : 2048;
   }
 
-  scene.add(new THREE.HemisphereLight(0xfff4e6, 0xd9cbb6, 0.48));
-  scene.add(new THREE.AmbientLight(0xfff1e4, 0.06));
-  const sun = new THREE.DirectionalLight(0xffe0b4, 3.6);
+  scene.add(new THREE.HemisphereLight(0xfff6ea, 0xe4d5c2, 0.62));
+  scene.add(new THREE.AmbientLight(0xfff3e8, 0.1));
+  const sun = new THREE.DirectionalLight(0xffe2b8, 3.15);
   sun.position.set(-18, 9.2, 7.4);
   sun.target.position.set(1.4, 2.4, 0);
   sun.castShadow = true;
@@ -738,14 +738,14 @@ export async function createDesign(renderer, { reduce, projects }) {
   sun.shadow.camera.bottom = -6;
   sun.shadow.camera.near = 2;
   sun.shadow.camera.far = 46;
-  sun.shadow.bias = -0.00028;
-  sun.shadow.normalBias = 0.012;
-  sun.shadow.radius = 7;
+  sun.shadow.bias = -0.00022;
+  sun.shadow.normalBias = 0.008;
+  sun.shadow.radius = 8;
   scene.add(sun, sun.target);
 
-  const windowLight = new THREE.SpotLight(0xfff3df, 22, 36, 0.62, 0.45, 1.1);
-  windowLight.position.set(-13.5, 10.4, 6.2);
-  windowLight.target.position.set(2.4, 1.6, 0);
+  const windowLight = new THREE.SpotLight(0xfff3dc, 78, 52, 0.86, 0.32, 1);
+  windowLight.position.set(-9.5, 13.2, 10.5);
+  windowLight.target.position.set(0.2, 3.4, 0);
   windowLight.map = windowCookie();
   windowLight.castShadow = false;
   scene.add(windowLight, windowLight.target);
@@ -1191,8 +1191,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const backGroup = new THREE.Group();
     lineGroup.add(backGroup);
 
-    const maskW = Math.max(0.5, matW * 0.56);
-    const maskH = Math.max(0.54, matH * 0.56);
+    const maskW = Math.max(0.46, matW * 0.5);
+    const maskH = Math.max(0.5, matH * 0.5);
     const laid = layoutPieces(
       entry.content,
       index * 19 + 4,
@@ -1339,7 +1339,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       maxY + (narrow ? 0.2 : 0.3),
       FRONT_Z,
       narrow ? 0.86 : 0.82,
-      narrow ? 0.06 : 0.12,
+      narrow ? 0.05 : 0.09,
     );
   }
 
@@ -1349,7 +1349,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const dist = narrow ? FOCUS_DIST * 0.92 : FOCUS_DIST;
     poseFov = narrow ? 32 : 27;
     camTarget.set(line.home.x + sign * orbit, line.coverY + 0.02, FRONT_Z + dist);
-    lookTarget.set(line.home.x + sign * 0.78, line.coverY, FRONT_Z - DEPTH * 0.5);
+    lookTarget.set(line.home.x + sign * 0.55, line.coverY, FRONT_Z - DEPTH * 0.5);
   }
 
   function paintPoster(screen) {
@@ -1438,7 +1438,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (suspended) return;
     renderer.toneMapping = THREE.AgXToneMapping;
-    renderer.toneMappingExposure = 1.06;
+    renderer.toneMappingExposure = 1.2;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false;
     if (!graded) {
