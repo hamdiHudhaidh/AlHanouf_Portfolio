@@ -254,7 +254,11 @@ async function go(id) {
   lastProject = null;
   fitRenderer();
   applyChrome();
-  if (active && renderer) renderer.render(active.scene, active.camera);
+  if (active && renderer) {
+    active.resume?.();
+    if (active.render) active.render(renderer);
+    else renderer.render(active.scene, active.camera);
+  }
   veil.classList.remove('on');
 }
 
@@ -386,7 +390,10 @@ function frame(now) {
   let spin = 0;
   if (active && current !== 'about') {
     spin = active.update(dt, now) || 0;
-    if (renderer) renderer.render(active.scene, active.camera);
+    if (renderer) {
+      if (active.render) active.render(renderer);
+      else renderer.render(active.scene, active.camera);
+    }
     const info = active.nav?.();
     const key = `${current}:${info?.index}:${info?.label}:${info?.hiding ? 1 : 0}`;
     if (key !== lastProject) {
