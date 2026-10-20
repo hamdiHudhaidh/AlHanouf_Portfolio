@@ -1,20 +1,22 @@
 import * as THREE from 'three';
 
 // Design is one off-white wall with two layers of twine.
-// The front lines hold one cover per project, hung at uneven drops.
-// Behind each cover, shorter strings sit closer to the wall and hold the
-// rest of that project. 00 shows the covers. An arrow zooms in until the
-// frame holds only that cover and its back strings; the back layer lowers
-// into place on the way in and lifts away on the way out.
+// The front lines hold one cover per project. Shorter strings behind each
+// cover, closer to the wall, hold the rest of that project. Both layers
+// hang all the time. 00 is a straight, distant view, so each cover hides
+// its own content. An arrow orbits closer and to the side; the depth between
+// the layers lets that content show beside the cover.
 
 const WALL_HALF = 5.2;
 const SAG = 0.22;
-const ROW_PITCH = 1.88;
-const TOP_Y = 6.35;
+const ROW_PITCH = 2.55;
+const TOP_Y = 6.85;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
-const TUCK_Y = 0.28;
-const TUCK_SCALE = 0.18;
+const FRONT_Z = 2.05;
+const DEPTH = 1.72;
+const ORBIT = 3.35;
+const FOCUS_DIST = 3.15;
 
 function hash(n) {
   let s = Math.imul(n + 1, 9973) >>> 0;
@@ -624,7 +626,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const curve = new THREE.CatmullRomCurve3(pts);
     const twine = new THREE.Mesh(new THREE.TubeGeometry(curve, 72, 0.02, 6, false), twineMat);
     twine.castShadow = true;
-    twine.position.set(0, rowY, 0.14);
+    twine.position.set(0, rowY, FRONT_Z);
     scene.add(twine);
     [-WALL_HALF, WALL_HALF].forEach((x) => {
       const hook = new THREE.Group();
@@ -636,7 +638,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       screw.position.z = -0.02;
       screw.castShadow = true;
       hook.add(ring, screw);
-      hook.position.set(x, rowY + sagAt(x), 0.14);
+      hook.position.set(x, rowY + sagAt(x), FRONT_Z);
       scene.add(hook);
     });
   }
@@ -685,10 +687,10 @@ export async function createDesign(renderer, { reduce, projects }) {
     let side = jitter;
     if (cols > 1) {
       const stagger = row % 2 === 0;
-      if (col === 0) side = (stagger ? -4.05 : -0.85) + jitter;
-      else side = (stagger ? 0.85 : 4.05) + jitter;
+      if (col === 0) side = (stagger ? -3.55 : -1.05) + jitter;
+      else side = (stagger ? 1.05 : 3.55) + jitter;
     }
-    const home = new THREE.Vector3(side, TOP_Y - row * ROW_PITCH, 0.18);
+    const home = new THREE.Vector3(side, TOP_Y - row * ROW_PITCH, FRONT_Z);
     const lineGroup = new THREE.Group();
     const cluster = lineGroup;
 
@@ -833,11 +835,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
 
     function hang(pivot, piece, topY) {
+      const span = piece.matH || piece.h;
       const sheet = new THREE.Group();
-      sheet.position.y = topY - piece.h / 2;
+      sheet.position.y = topY - span / 2;
       pivot.add(sheet);
+      if (piece.matW) {
+        const mat = plane(piece.matW, piece.matH, paperMat);
+        mat.position.z = -0.01;
+        sheet.add(mat);
+      }
       buildPiece(piece, sheet);
-      return topY - piece.h;
+      return topY - span;
     }
 
     function hangColumn(parent, col, stringY, half) {
@@ -861,81 +869,79 @@ export async function createDesign(renderer, { reduce, projects }) {
     const heroStyle = entry.cover ? heroStyles[index % heroStyles.length] : 'print';
     const heroRnd = hash(index + 29);
     const heroSize = unitSize(heroStyle, entry.cover || { aspect: 1 });
-    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 0.95 : 1.12;
+    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 1.7 : 2.15;
+    const printW = heroSize.w * heroScale;
+    const printH = heroSize.h * heroScale;
+    const matW = Math.max(printW + 0.12, 1.28);
+    const matH = Math.max(printH + 0.14, 1.48);
     const hero = {
       style: heroStyle,
       image: entry.cover?.image || null,
       kind: 'image',
       items: entry.cover ? [entry.cover] : [],
-      w: heroSize.w * heroScale,
-      h: heroSize.h * heroScale,
+      w: printW,
+      h: printH,
+      matW,
+      matH,
       photoW: (heroSize.photoW || heroSize.w * 0.82) * heroScale,
       photoH: (heroSize.photoH || heroSize.h * 0.78) * heroScale,
     };
-    const heroDrop = 0.05 + heroRnd() * 0.26;
+    const heroDrop = 0.06 + heroRnd() * 0.2;
     const heroPivot = new THREE.Group();
     heroPivot.position.set(0, sagAt(home.x), 0.02);
-    heroPivot.rotation.z = (heroRnd() - 0.5) * 0.1;
+    heroPivot.rotation.z = (heroRnd() - 0.5) * 0.06;
     addSHook(heroPivot, 0.01);
-    addDrop(heroPivot, -0.03, heroDrop, (heroRnd() - 0.5) * 0.02);
-    const heroLow = hang(heroPivot, hero, -(0.03 + heroDrop));
+    addDrop(heroPivot, -0.03, heroDrop, (heroRnd() - 0.5) * 0.015);
+    const heroTopLocal = -(0.03 + heroDrop);
+    const heroLow = hang(heroPivot, hero, heroTopLocal);
     lineGroup.add(heroPivot);
     pivots.push(heroPivot);
     const heroBottom = heroPivot.position.y + heroLow;
-    const heroTop = heroPivot.position.y + 0.06;
+    const heroTop = heroPivot.position.y + heroTopLocal;
+    const coverY = (heroTop + heroBottom) / 2;
 
     const backGroup = new THREE.Group();
-    backGroup.position.set(0, 0, -0.12);
     lineGroup.add(backGroup);
 
-    const pages = entry.content.filter((item) => item.kind === 'website');
-    const rest = entry.content.filter((item) => item.kind !== 'website');
-    const hangDepth = heroPivot.position.y - heroBottom;
-    const room = Math.max(0.42, ROW_PITCH - hangDepth - 0.36);
-    const chunks = [];
-    if (pages.length) {
-      if (rest.length) chunks.push({ items: rest, tag: false, page: false });
-      chunks.push({ items: pages, tag: true, page: true });
-    } else if (rest.length > 3 && room > 1.15) {
-      const mid = Math.ceil(rest.length / 2);
-      chunks.push({ items: rest.slice(0, mid), tag: false, page: false });
-      chunks.push({ items: rest.slice(mid), tag: true, page: false });
-    } else {
-      chunks.push({ items: rest, tag: true, page: false });
-    }
-    const share = room / chunks.length;
-    let stringY = heroBottom - 0.06;
-    let minX = -hero.w / 2 - 0.08;
-    let maxX = hero.w / 2 + 0.08;
-    let minY = heroBottom;
-    chunks.forEach((chunk, ri) => {
-      const laid = layoutPieces(
-        chunk.items,
-        index * 19 + ri + 4,
-        chunk.tag ? (entry.project.text || '') : '',
-        {
-          maxW: 2.7,
-          colMax: Math.max(0.36, share - 0.06),
-          tag: chunk.tag,
-        },
-      );
-      const half = Math.max(0.58, laid.row / 2 + 0.12);
+    const maskW = Math.max(0.5, matW * 0.56);
+    const maskH = Math.max(0.54, matH * 0.56);
+    const laid = layoutPieces(
+      entry.content,
+      index * 19 + 4,
+      entry.project.text || '',
+      { maxW: maskW, colMax: maskH, tag: true },
+    );
+    const half = Math.max(0.34, Math.min(maskW / 2, laid.row / 2 + 0.08));
+    const stringY = 0;
+    let cMinX = half;
+    let cMaxX = -half;
+    let cMinY = 0.2;
+    let cMaxY = -0.2;
+    const noteBound = (x0, x1, y0, y1) => {
+      cMinX = Math.min(cMinX, x0, x1);
+      cMaxX = Math.max(cMaxX, x0, x1);
+      cMinY = Math.min(cMinY, y0, y1);
+      cMaxY = Math.max(cMaxY, y0, y1);
+    };
+    if (laid.columns.length || laid.tagH) {
       addShortString(backGroup, stringY, half);
+      noteBound(-half, half, stringY - 0.06, stringY + 0.02);
       laid.columns.forEach((col) => {
-        minY = Math.min(minY, hangColumn(backGroup, col, stringY, half));
+        const low = hangColumn(backGroup, col, stringY, half);
+        noteBound(col.x - col.w / 2, col.x + col.w / 2, low, stringY);
       });
-      if (chunk.tag && laid.tagH) {
+      if (laid.tagH) {
         const pivot = new THREE.Group();
         pivot.position.set(laid.tagX, stringY + shortSag(laid.tagX, half), 0.02);
         pivot.rotation.z = laid.tagTilt || 0;
         addSHook(pivot, 0.01);
-        addDrop(pivot, -0.03, laid.tagDrop, 0.012);
+        addDrop(pivot, -0.03, laid.tagDrop, 0.01);
         const tag = new THREE.Mesh(
           new THREE.PlaneGeometry(laid.tagW, laid.tagH),
           new THREE.MeshBasicMaterial({
             map: tagTexture(entry.project, renderer),
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.92,
             alphaTest: 0.35,
             toneMapped: false,
             shadowSide: THREE.DoubleSide,
@@ -950,33 +956,37 @@ export async function createDesign(renderer, { reduce, projects }) {
         const href = entry.project.links?.[0]?.href;
         if (href) {
           const visitH = 0.16;
-          const visitDrop = 0.045;
+          const visitDrop = 0.04;
           const visitTop = tag.position.y - laid.tagH / 2;
           addSHook(pivot, visitTop + 0.008);
-          addDrop(pivot, visitTop - 0.012, visitDrop, -0.008);
+          addDrop(pivot, visitTop - 0.01, visitDrop, -0.006);
           const visit = new THREE.Mesh(
-            new THREE.PlaneGeometry(Math.min(0.4, laid.tagW), visitH),
+            new THREE.PlaneGeometry(Math.min(0.42, laid.tagW), visitH),
             new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
           );
-          visit.position.y = visitTop - 0.012 - visitDrop - visitH / 2;
+          visit.position.y = visitTop - 0.01 - visitDrop - visitH / 2;
           visit.castShadow = true;
           visit.userData.href = href;
           pivot.add(visit);
           visits.push(visit);
           low = Math.min(low, pivot.position.y + visit.position.y - visitH / 2);
         }
-        minY = Math.min(minY, low);
+        noteBound(laid.tagX - laid.tagW / 2, laid.tagX + laid.tagW / 2, low, pivot.position.y);
       }
-      minX = Math.min(minX, -half);
-      maxX = Math.max(maxX, half);
-      minY = Math.min(minY, stringY - laid.hang);
-      stringY -= share;
+    }
+    const contentW = Math.max(0.2, cMaxX - cMinX);
+    const contentH = Math.max(0.2, cMaxY - cMinY);
+    const contentCx = (cMinX + cMaxX) / 2;
+    const contentCy = (cMinY + cMaxY) / 2;
+    const fit = Math.min(1.45, (maskW * 0.98) / contentW, (maskH * 0.98) / contentH);
+    backGroup.scale.setScalar(fit);
+    backGroup.position.set(-contentCx * fit, coverY - contentCy * fit, -DEPTH);
+    backGroup.traverse((obj) => {
+      if (obj.isMesh) obj.castShadow = false;
     });
 
     lineGroup.position.copy(home);
     scene.add(lineGroup);
-    backGroup.position.y = TUCK_Y;
-    backGroup.scale.setScalar(TUCK_SCALE);
 
     lines.push({
       project: entry.project,
@@ -986,16 +996,12 @@ export async function createDesign(renderer, { reduce, projects }) {
       videos: lineVideos,
       scroll: cluster.userData.scroll || null,
       home,
-      reveal: 0,
-      revealFrom: 0,
-      revealTo: 0,
       swingStart: -1,
-      minX: home.x + minX,
-      maxX: home.x + maxX,
-      minY: home.y + minY,
-      maxY: home.y + heroTop,
+      coverY: home.y + coverY,
       heroBottom,
       heroTop,
+      matW,
+      matH,
     });
   });
 
@@ -1005,6 +1011,9 @@ export async function createDesign(renderer, { reduce, projects }) {
   let moveStart = 0;
   let moveMs = 1200;
   let moveEaseIn = true;
+  let poseFov = 22;
+  let fovFrom = 22;
+  let fovTo = 22;
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
 
@@ -1013,7 +1022,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const cy = (minY + maxY) / 2;
     const spanX = Math.max(0.4, maxX - minX);
     const spanY = Math.max(0.4, maxY - minY);
-    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    const tanV = Math.tan((poseFov * Math.PI) / 360);
     const aspect = Math.max(0.35, camera.aspect);
     const dist = Math.max(
       spanY / (2 * tanV * fill),
@@ -1026,45 +1035,31 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function overviewPose() {
-    let minX = Infinity;
-    let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
     lines.forEach((line) => {
-      minX = Math.min(minX, Math.min(line.home.x - 0.55, -WALL_HALF));
-      maxX = Math.max(maxX, Math.max(line.home.x + 0.55, WALL_HALF));
       minY = Math.min(minY, line.home.y + line.heroBottom);
-      maxY = Math.max(maxY, line.home.y + line.heroTop);
+      maxY = Math.max(maxY, line.home.y + line.heroTop + 0.12);
     });
+    poseFov = narrow ? 26 : 20;
     fitPose(
-      minX - (narrow ? 0.2 : 0.35),
-      maxX + (narrow ? 0.2 : 0.35),
-      minY - (narrow ? 0.22 : 0.28),
-      maxY + (narrow ? 0.16 : 0.22),
-      0.14,
-      narrow ? 0.9 : 0.86,
-      narrow ? 0.1 : 0.2,
+      -WALL_HALF - 0.25,
+      WALL_HALF + 0.25,
+      minY - (narrow ? 0.3 : 0.45),
+      maxY + (narrow ? 0.2 : 0.3),
+      FRONT_Z,
+      narrow ? 0.86 : 0.82,
+      0,
     );
   }
 
   function focusPose(line) {
-    const padX = narrow ? 0.06 : 0.1;
-    const padY = narrow ? 0.05 : 0.07;
-    fitPose(
-      line.minX - padX,
-      line.maxX + padX,
-      line.minY - padY,
-      line.maxY + padY,
-      line.home.z,
-      narrow ? 0.94 : 0.93,
-      narrow ? 0.015 : 0.03,
-    );
-  }
-
-  function applyReveal(line) {
-    const reveal = line.reveal;
-    line.backGroup.position.y = TUCK_Y * (1 - reveal);
-    line.backGroup.scale.setScalar(TUCK_SCALE + (1 - TUCK_SCALE) * reveal);
+    const sign = line.home.x >= 0 ? 1 : -1;
+    const orbit = narrow ? ORBIT * 0.82 : ORBIT;
+    const dist = narrow ? FOCUS_DIST * 0.92 : FOCUS_DIST;
+    poseFov = narrow ? 26 : 21;
+    camTarget.set(line.home.x + sign * orbit, line.coverY + 0.02, FRONT_Z + dist);
+    lookTarget.set(line.home.x + sign * 0.78, line.coverY, FRONT_Z - DEPTH * 0.5);
   }
 
   function paintPoster(screen) {
@@ -1104,19 +1099,18 @@ export async function createDesign(renderer, { reduce, projects }) {
     else focusPose(lines[focus]);
     camTo.copy(camTarget);
     lookTo.copy(lookTarget);
+    fovTo = poseFov;
     lines.forEach((line, i) => {
-      line.revealFrom = line.reveal;
-      line.revealTo = i === focus ? 1 : 0;
       line.swingStart = i === focus && !snap && !reduce ? performance.now() : -1;
     });
     syncMedia();
     if (snap || reduce) {
       moving = false;
       lines.forEach((line) => {
-        line.reveal = line.revealTo;
-        applyReveal(line);
         line.pivots.forEach((pivot) => { pivot.rotation.x = 0; });
       });
+      camera.fov = fovTo;
+      camera.updateProjectionMatrix();
       camera.position.copy(camTo);
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
@@ -1124,16 +1118,13 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
     camFrom.copy(camera.position);
     lookFrom.copy(lookNow);
+    fovFrom = camera.fov;
     const travel = camFrom.distanceTo(camTo);
-    moveMs = Math.min(1600, Math.max(1000, 760 + travel * 70));
+    moveMs = Math.min(1600, Math.max(1000, 760 + travel * 55));
     moveEaseIn = !moving;
     moveStart = performance.now();
-    moving = travel > 0.02;
+    moving = travel > 0.02 || Math.abs(fovFrom - fovTo) > 0.2;
     if (!moving) {
-      lines.forEach((line) => {
-        line.reveal = line.revealTo;
-        applyReveal(line);
-      });
       camera.position.copy(camTo);
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
@@ -1161,10 +1152,6 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
     const focus = slot - 1;
     lines.forEach((line, i) => {
-      if (apply) {
-        line.reveal = line.revealFrom + (line.revealTo - line.revealFrom) * e;
-        applyReveal(line);
-      }
       const on = i === focus;
       line.pivots.forEach((pivot, k) => {
         let target = 0;
@@ -1192,6 +1179,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       }
     });
     if (apply) {
+      camera.fov = fovFrom + (fovTo - fovFrom) * e;
+      camera.updateProjectionMatrix();
       camera.position.lerpVectors(camFrom, camTo, e);
       lookNow.lerpVectors(lookFrom, lookTo, e);
     }
