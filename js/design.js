@@ -9,8 +9,8 @@ import * as THREE from 'three';
 
 const WALL_HALF = 5.2;
 const SAG = 0.22;
-const ROW_PITCH = 2.4;
-const TOP_Y = 7.3;
+const ROW_PITCH = 1.88;
+const TOP_Y = 6.35;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const TUCK_Y = 0.28;
@@ -681,7 +681,13 @@ export async function createDesign(renderer, { reduce, projects }) {
     const row = Math.floor(index / 2);
     const col = index % 2;
     const cols = Math.min(2, prepared.length - row * 2);
-    const side = cols === 1 ? (place() - 0.5) * 1.4 : (col === 0 ? -1 : 1) * (2.15 + place() * 1.2);
+    const jitter = (place() - 0.5) * 0.55;
+    let side = jitter;
+    if (cols > 1) {
+      const stagger = row % 2 === 0;
+      if (col === 0) side = (stagger ? -4.05 : -0.85) + jitter;
+      else side = (stagger ? 0.85 : 4.05) + jitter;
+    }
     const home = new THREE.Vector3(side, TOP_Y - row * ROW_PITCH, 0.18);
     const lineGroup = new THREE.Group();
     const cluster = lineGroup;
@@ -855,7 +861,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const heroStyle = entry.cover ? heroStyles[index % heroStyles.length] : 'print';
     const heroRnd = hash(index + 29);
     const heroSize = unitSize(heroStyle, entry.cover || { aspect: 1 });
-    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 1.2 : 1.45;
+    const heroScale = heroStyle === 'cyan' || heroStyle === 'burnt' ? 0.95 : 1.12;
     const hero = {
       style: heroStyle,
       image: entry.cover?.image || null,
@@ -885,7 +891,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const pages = entry.content.filter((item) => item.kind === 'website');
     const rest = entry.content.filter((item) => item.kind !== 'website');
     const hangDepth = heroPivot.position.y - heroBottom;
-    const room = Math.max(0.72, ROW_PITCH - hangDepth - 0.16);
+    const room = Math.max(0.42, ROW_PITCH - hangDepth - 0.36);
     const chunks = [];
     if (pages.length) {
       if (rest.length) chunks.push({ items: rest, tag: false, page: false });
@@ -908,8 +914,8 @@ export async function createDesign(renderer, { reduce, projects }) {
         index * 19 + ri + 4,
         chunk.tag ? (entry.project.text || '') : '',
         {
-          maxW: 2.55,
-          colMax: Math.max(0.42, share - 0.12),
+          maxW: 2.7,
+          colMax: Math.max(0.36, share - 0.06),
           tag: chunk.tag,
         },
       );
@@ -1020,36 +1026,38 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function overviewPose() {
+    let minX = Infinity;
+    let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
     lines.forEach((line) => {
+      minX = Math.min(minX, Math.min(line.home.x - 0.55, -WALL_HALF));
+      maxX = Math.max(maxX, Math.max(line.home.x + 0.55, WALL_HALF));
       minY = Math.min(minY, line.home.y + line.heroBottom);
       maxY = Math.max(maxY, line.home.y + line.heroTop);
     });
-    const padX = narrow ? 0.45 : 0.7;
-    const padY = narrow ? 0.28 : 0.42;
     fitPose(
-      -WALL_HALF - padX,
-      WALL_HALF + padX,
-      minY - padY,
-      maxY + padY,
+      minX - (narrow ? 0.2 : 0.35),
+      maxX + (narrow ? 0.2 : 0.35),
+      minY - (narrow ? 0.22 : 0.28),
+      maxY + (narrow ? 0.16 : 0.22),
       0.14,
-      narrow ? 0.84 : 0.8,
-      narrow ? 0.28 : 0.78,
+      narrow ? 0.9 : 0.86,
+      narrow ? 0.1 : 0.2,
     );
   }
 
   function focusPose(line) {
-    const padX = narrow ? 0.08 : 0.12;
-    const padY = narrow ? 0.06 : 0.08;
+    const padX = narrow ? 0.06 : 0.1;
+    const padY = narrow ? 0.05 : 0.07;
     fitPose(
       line.minX - padX,
       line.maxX + padX,
       line.minY - padY,
       line.maxY + padY,
       line.home.z,
-      narrow ? 0.92 : 0.9,
-      narrow ? 0.02 : 0.04,
+      narrow ? 0.94 : 0.93,
+      narrow ? 0.015 : 0.03,
     );
   }
 
@@ -1227,7 +1235,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   aim(0, true);
-  return {
+  const result = {
     scene,
     camera,
     resize,
@@ -1243,4 +1251,5 @@ export async function createDesign(renderer, { reduce, projects }) {
       project: slot > 0 ? lines[slot - 1].project : null,
     }),
   };
+  return result;
 }
