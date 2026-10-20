@@ -1,30 +1,37 @@
 import * as THREE from 'three';
 
-// Design is a print studio. Ten lines are strung through the room, one project
-// each, at different heights, depths, and lengths so the whole studio reads
-// from 00 without the sheets covering one another. The chosen line slides
-// forward and the sheets swing once on their pegs, then settle. The other
-// lines step back under a white veil. The camera eases with that slide.
+// Design is one off-white wall. Twine lines run across it in even rows, each
+// with a gentle sag and a screw-eye at either end. Two projects share a row
+// when there are more projects than rows. The chosen project's prints come
+// forward and enlarge; they swing once on their pegs and settle. The other
+// projects stay on the wall under a white veil. The camera eases with that move.
 
-// Each slot is the centre of one wire. span is half its length. maxW includes
-// the paper tag. The slots are staggered in x, y, and z so their sheets miss.
-const SLOTS = [
-  { x: -3.9, y: 4.7, z: -6.0, span: 2.2, maxW: 2.95, maxH: 0.9 },
-  { x: 0.0, y: 5.05, z: -3.5, span: 1.75, maxW: 2.55, maxH: 0.86 },
-  { x: 3.95, y: 4.42, z: -6.6, span: 2.3, maxW: 3.05, maxH: 0.92 },
-  { x: -4.85, y: 3.0, z: -2.2, span: 1.45, maxW: 2.2, maxH: 0.8 },
-  { x: -1.6, y: 3.22, z: -4.9, span: 1.6, maxW: 2.35, maxH: 0.84 },
-  { x: 1.45, y: 2.78, z: -1.85, span: 1.5, maxW: 2.2, maxH: 0.8 },
-  { x: 4.85, y: 3.12, z: -5.4, span: 1.35, maxW: 2.05, maxH: 0.78 },
-  { x: -3.2, y: 1.18, z: -4.2, span: 2.0, maxW: 2.75, maxH: 0.88 },
-  { x: 0.05, y: 1.0, z: -1.45, span: 1.75, maxW: 2.45, maxH: 0.84 },
-  { x: 3.7, y: 1.42, z: -6.2, span: 2.15, maxW: 2.8, maxH: 0.9 },
-];
-const TAG_W = 0.56;
-const TAG_GAP = 0.1;
+const WALL_HALF = 5.2;
+const SAG = 0.22;
+const ROW_PITCH = 1.32;
+const TOP_Y = 5.75;
+const SEG_X = 2.56;
+const TAG_W = 0.5;
+const TAG_H = 0.64;
+const TAG_GAP = 0.07;
 const TAG_EXTRA = TAG_GAP + TAG_W;
-const GAP = 0.05;
-const FRONT_Z = 2.35;
+const MAX_W = 4.15;
+const MAX_H = 0.74;
+const FOCUS_SCALE = 1.54;
+const FRONT_Z = 1.22;
+
+function hash(n) {
+  let s = Math.imul(n + 1, 9973) >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function sagAt(worldX) {
+  const u = worldX / WALL_HALF;
+  return -SAG * (1 - u * u);
+}
 
 function easeGlide(t, easeIn) {
   if (!easeIn) return 1 - (1 - t) * (1 - t);
@@ -201,28 +208,55 @@ function itemsOf(project) {
   return (project.images || []).map((src) => ({ kind: 'image', src }));
 }
 
-function layoutPieces(items, maxW, maxH) {
+function layoutPieces(items, seed) {
   if (!items.length) return { pieces: [], row: 0 };
+  const rnd = hash(seed);
   const n = items.length;
-  const targetH = n >= 6 ? 0.72 : n >= 4 ? 0.88 : n === 1 ? 1.26 : 1.08;
+  const targetH = n >= 6 ? 0.5 : n >= 4 ? 0.58 : n === 1 ? 0.78 : 0.66;
   const pieces = items.map((item) => {
     const aspect = Math.max(0.2, item.aspect || 1);
-    let h = item.kind === 'website' ? 1.46 : targetH;
-    const w = item.kind === 'website' ? h * 0.58 : h * aspect;
-    return { ...item, w, h, aspect };
+    const jitter = 0.9 + rnd() * 0.16;
+    const tilt = (rnd() - 0.5) * (item.kind === 'image' ? 0.11 : 0.03);
+    const gap = 0.03 + rnd() * 0.05;
+    let photoH = (item.kind === 'website' ? 0.96 : targetH) * jitter;
+    let photoW = item.kind === 'website' ? photoH * 0.6 : photoH * aspect;
+    let topMargin = 0;
+    let bottomMargin = 0;
+    let w = photoW;
+    let h = photoH;
+    if (item.kind === 'image') {
+      topMargin = photoH * 0.055;
+      const side = photoH * 0.05;
+      bottomMargin = photoH * 0.18;
+      w = photoW + side * 2;
+      h = photoH + topMargin + bottomMargin;
+    } else if (item.kind === 'video') {
+      w = photoW + photoH * 0.12;
+    }
+    return { ...item, w, h, photoW, photoH, topMargin, bottomMargin, tilt, gap, aspect };
   });
-  let row = pieces.reduce((sum, p) => sum + p.w, 0) + GAP * Math.max(0, n - 1);
+  let row = 0;
+  pieces.forEach((p, i) => { row += p.w + (i ? p.gap : 0); });
   const tallest = Math.max(...pieces.map((p) => p.h));
-  const rowMax = Math.max(0.4, maxW - TAG_EXTRA);
-  const fit = Math.min(1, rowMax / Math.max(row, 0.01), maxH / Math.max(tallest, 0.01));
+  const rowMax = Math.max(0.5, MAX_W - TAG_EXTRA);
+  const fit = Math.min(1, rowMax / Math.max(row, 0.01), MAX_H / Math.max(tallest, 0.01));
   if (fit < 1) {
-    pieces.forEach((p) => { p.w *= fit; p.h *= fit; });
+    pieces.forEach((p) => {
+      p.w *= fit;
+      p.h *= fit;
+      p.photoW *= fit;
+      p.photoH *= fit;
+      p.topMargin *= fit;
+      p.bottomMargin *= fit;
+      p.gap *= fit;
+    });
     row *= fit;
   }
   let x = -row / 2;
-  pieces.forEach((p) => {
+  pieces.forEach((p, i) => {
+    if (i) x += p.gap;
     p.x = x + p.w / 2;
-    x += p.w + GAP;
+    x += p.w;
   });
   return { pieces, row };
 }
@@ -253,8 +287,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xe6dfd4);
-  scene.fog = new THREE.Fog(0xe6dfd4, 18, 36);
+  scene.background = new THREE.Color(0xf6f1e8);
   const camera = new THREE.PerspectiveCamera(32, 1, 0.08, 80);
   const camTarget = new THREE.Vector3();
   const lookTarget = new THREE.Vector3();
@@ -262,106 +295,137 @@ export async function createDesign(renderer, { reduce, projects }) {
   const camTo = new THREE.Vector3();
   const lookFrom = new THREE.Vector3();
   const lookTo = new THREE.Vector3();
-  const lookNow = new THREE.Vector3(0, 1.6, -3);
-  const fogPoint = new THREE.Vector3();
+  const lookNow = new THREE.Vector3(1.2, 2.8, 8);
 
-  scene.add(new THREE.HemisphereLight(0xf7f1e8, 0xcfc4b6, 0.92));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.38));
-  const sun = new THREE.DirectionalLight(0xfff6ea, 0.85);
-  sun.position.set(-3.2, 7.2, 4.4);
-  scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0xfff8f1, 0xe7dccb, 0.42));
+  scene.add(new THREE.AmbientLight(0xfff4ea, 0.22));
+  const sun = new THREE.DirectionalLight(0xfff1e0, 2.4);
+  sun.position.set(-16, 4.8, 2.6);
+  sun.target.position.set(0.6, 2.9, 0);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -16;
+  sun.shadow.camera.right = 16;
+  sun.shadow.camera.top = 12;
+  sun.shadow.camera.bottom = -10;
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 40;
+  sun.shadow.bias = -0.00035;
+  sun.shadow.normalBias = 0.004;
+  sun.shadow.radius = 3.2;
+  scene.add(sun, sun.target);
 
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xe6dfd4, roughness: 0.96 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0xcfc4b6, roughness: 0.94 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0xc4a27a, roughness: 0.7 });
-  const springMat = new THREE.MeshStandardMaterial({ color: 0x6e4b32, roughness: 0.42, metalness: 0.28 });
-  const paperMat = new THREE.MeshBasicMaterial({ color: 0xf4efe6, fog: false });
-  const wireMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.38, metalness: 0.18 });
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 36), floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(16, 7.2), wallMat);
-  back.position.set(0, 3.35, -8.4);
-  scene.add(back);
-  const windowLight = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.1, 2.15),
-    new THREE.MeshBasicMaterial({ color: 0xf7f1e8, fog: false }),
-  );
-  windowLight.position.set(2.3, 3.7, -8.32);
-  scene.add(windowLight);
-  [-6.7, 6.7].forEach((x) => {
-    const side = new THREE.Mesh(new THREE.PlaneGeometry(36, 7.2), wallMat);
-    side.position.set(x, 3.35, 2);
-    side.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
-    scene.add(side);
-  });
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(16, 18), wallMat);
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, 6.7, -0.4);
-  scene.add(ceiling);
-
-  const pegBody = new THREE.BoxGeometry(0.03, 0.072, 0.02);
-  const pegBite = new THREE.BoxGeometry(0.034, 0.012, 0.022);
-  const pegSpring = new THREE.TorusGeometry(0.012, 0.0032, 6, 10);
+  const flat = (color) => new THREE.MeshBasicMaterial({ color, toneMapped: false });
+  const wallMat = flat(0xf6f1e8);
+  const woodMat = flat(0xe4cfae);
+  const springMat = flat(0xb08968);
+  const metalMat = flat(0x6f6a64);
+  const twineMat = flat(0xc49a62);
+  const paperMat = flat(0xfffdf9);
+  paperMat.shadowSide = THREE.DoubleSide;
   const holes = sprocketTexture(renderer);
   const visitMap = visitTexture(renderer);
 
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(46, 28), wallMat);
+  wall.position.set(0, 3.1, 0);
+  scene.add(wall);
+  const catcher = new THREE.Mesh(
+    new THREE.PlaneGeometry(46, 28),
+    new THREE.ShadowMaterial({ color: 0x3a332b, opacity: 0.5, transparent: true, depthWrite: false, toneMapped: false }),
+  );
+  catcher.position.set(0, 3.1, 0.02);
+  catcher.receiveShadow = true;
+  catcher.renderOrder = 1;
+  scene.add(catcher);
+
+  const pegBody = new THREE.BoxGeometry(0.015, 0.092, 0.016);
+  const pegSpring = new THREE.TorusGeometry(0.012, 0.0032, 6, 10);
+
   function addPeg(parent, x) {
     const peg = new THREE.Group();
-    const body = new THREE.Mesh(pegBody, woodMat);
-    body.position.y = -0.028;
-    const bite = new THREE.Mesh(pegBite, woodMat);
-    bite.position.y = 0.012;
+    const leg = new THREE.Mesh(pegBody, woodMat);
+    leg.position.set(-0.009, -0.028, 0);
+    leg.castShadow = true;
+    const leg2 = new THREE.Mesh(pegBody, woodMat);
+    leg2.position.set(0.009, -0.028, 0);
+    leg2.castShadow = true;
     const spring = new THREE.Mesh(pegSpring, springMat);
     spring.rotation.y = Math.PI / 2;
     spring.position.y = 0.008;
-    peg.add(bite, body, spring);
-    peg.position.set(x, 0, 0.012);
+    spring.castShadow = true;
+    peg.add(leg, leg2, spring);
+    peg.position.set(x, 0.012, 0.016);
     parent.add(peg);
   }
+
+  function addString(rowY) {
+    const pts = [];
+    const steps = 40;
+    for (let i = 0; i <= steps; i++) {
+      const x = -WALL_HALF + (i / steps) * WALL_HALF * 2;
+      pts.push(new THREE.Vector3(x, sagAt(x), 0));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const twine = new THREE.Mesh(new THREE.TubeGeometry(curve, 72, 0.02, 6, false), twineMat);
+    twine.castShadow = true;
+    twine.position.set(0, rowY, 0.07);
+    scene.add(twine);
+    [-WALL_HALF, WALL_HALF].forEach((x) => {
+      const hook = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.012, 8, 20), metalMat);
+      ring.rotation.y = Math.PI / 2;
+      ring.castShadow = true;
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.007, 0.045, 6), metalMat);
+      screw.rotation.x = Math.PI / 2;
+      screw.position.z = -0.02;
+      screw.castShadow = true;
+      hook.add(ring, screw);
+      hook.position.set(x, rowY + sagAt(x), 0.07);
+      scene.add(hook);
+    });
+  }
+
+  const rowCount = Math.max(1, Math.ceil(prepared.length / 2));
+  for (let row = 0; row < rowCount; row++) addString(TOP_Y - row * ROW_PITCH);
 
   const lines = [];
   const visits = [];
   const videos = [];
 
   prepared.forEach((entry, index) => {
-    const slot = SLOTS[index] || SLOTS[SLOTS.length - 1];
-    const home = new THREE.Vector3(slot.x, slot.y, slot.z);
-    const laid = layoutPieces(entry.items, slot.maxW, slot.maxH);
+    const row = Math.floor(index / 2);
+    const col = index % 2;
+    const cols = Math.min(2, prepared.length - row * 2);
+    const segX = cols === 1 ? 0 : (col === 0 ? -SEG_X : SEG_X);
+    const home = new THREE.Vector3(segX, TOP_Y - row * ROW_PITCH, 0.09);
+    const laid = layoutPieces(entry.items, index + 3);
     const centerNudge = TAG_EXTRA / 2;
     laid.pieces.forEach((piece) => { piece.x -= centerNudge; });
     const lineGroup = new THREE.Group();
     const cluster = new THREE.Group();
     lineGroup.add(cluster);
-    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, slot.span * 2, 8), wireMat);
-    wire.rotation.z = Math.PI / 2;
-    lineGroup.add(wire);
-    [-slot.span, slot.span].forEach((x) => {
-      const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.055, 0.05), woodMat);
-      cleat.position.set(home.x + x, home.y, home.z);
-      scene.add(cleat);
-    });
 
     const pivots = [];
     const lineVideos = [];
-    let bottom = -0.2;
+    let bottom = -0.15;
 
     laid.pieces.forEach((piece, i) => {
       const pivot = new THREE.Group();
-      pivot.position.set(piece.x, 0, 0.01 + i * 0.006);
-      const pegSpan = piece.w * 0.28;
-      if (piece.w > 0.42) {
+      const worldX = home.x + piece.x;
+      pivot.position.set(piece.x, sagAt(worldX), 0.012 + i * 0.004);
+      pivot.rotation.z = piece.tilt || 0;
+      const pegSpan = piece.w * 0.22;
+      if (piece.w > 0.72) {
         addPeg(pivot, -pegSpan);
         addPeg(pivot, pegSpan);
       } else addPeg(pivot, 0);
 
       const sheet = new THREE.Group();
-      sheet.position.y = -(0.05 + piece.h / 2);
+      sheet.position.y = -(0.04 + piece.h / 2);
       pivot.add(sheet);
       cluster.add(pivot);
       pivots.push(pivot);
-      bottom = Math.min(bottom, -0.05 - piece.h);
+      bottom = Math.min(bottom, pivot.position.y - 0.04 - piece.h);
 
       if (piece.kind === 'video') {
         const bar = Math.min(0.05, piece.w * 0.075);
@@ -391,7 +455,7 @@ export async function createDesign(renderer, { reduce, projects }) {
         const screen = { video, canvas, ctx, tex, poster };
         lineVideos.push(screen);
         videos.push(screen);
-        const barMat = new THREE.MeshBasicMaterial({ map: holes.clone(), fog: false });
+        const barMat = new THREE.MeshBasicMaterial({ map: holes.clone(), fog: false, shadowSide: THREE.DoubleSide });
         barMat.map.wrapT = THREE.RepeatWrapping;
         barMat.map.repeat.y = Math.max(1, piece.h / 0.18);
         barMat.map.colorSpace = THREE.SRGBColorSpace;
@@ -400,18 +464,22 @@ export async function createDesign(renderer, { reduce, projects }) {
         barMat2.map.wrapT = THREE.RepeatWrapping;
         barMat2.map.repeat.y = barMat.map.repeat.y;
         barMat2.map.colorSpace = THREE.SRGBColorSpace;
-        const left = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat);
-        left.position.x = -(pictureW / 2 + bar / 2);
-        const right = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat2);
-        right.position.x = pictureW / 2 + bar / 2;
+        const leftBar = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat);
+        leftBar.position.x = -(pictureW / 2 + bar / 2);
+        leftBar.castShadow = true;
+        const rightBar = new THREE.Mesh(new THREE.PlaneGeometry(bar, piece.h), barMat2);
+        rightBar.position.x = pictureW / 2 + bar / 2;
+        rightBar.castShadow = true;
         const pic = new THREE.Mesh(
           new THREE.PlaneGeometry(pictureW, piece.h),
-          new THREE.MeshBasicMaterial({ map: tex, fog: false }),
+          new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }),
         );
-        sheet.add(left, right, pic);
+        pic.castShadow = true;
+        sheet.add(leftBar, rightBar, pic);
       } else if (piece.kind === 'website' && piece.image) {
         const mount = new THREE.Mesh(new THREE.PlaneGeometry(piece.w, piece.h), paperMat);
         mount.position.z = -0.004;
+        mount.castShadow = true;
         const shotW = piece.w - 0.05;
         const shotH = piece.h - 0.07;
         const tex = makeTexture(piece.image, renderer);
@@ -428,54 +496,57 @@ export async function createDesign(renderer, { reduce, projects }) {
         }
         const shot = new THREE.Mesh(
           new THREE.PlaneGeometry(shotW, shotH),
-          new THREE.MeshBasicMaterial({ map: tex, fog: false }),
+          new THREE.MeshBasicMaterial({ map: tex, fog: false, shadowSide: THREE.DoubleSide }),
         );
         shot.position.y = 0.012;
+        shot.castShadow = true;
         sheet.add(mount, shot);
         if (scroll) cluster.userData.scroll = scroll;
       } else {
-        const mount = new THREE.Mesh(
-          new THREE.PlaneGeometry(piece.w + 0.03, piece.h + 0.03),
-          paperMat,
-        );
-        mount.position.z = -0.004;
+        const mount = new THREE.Mesh(new THREE.PlaneGeometry(piece.w, piece.h), paperMat);
+        mount.castShadow = true;
         sheet.add(mount);
         if (piece.image) {
           const tex = makeTexture(piece.image, renderer);
           const pic = new THREE.Mesh(
-            new THREE.PlaneGeometry(piece.w, piece.h),
-            new THREE.MeshBasicMaterial({ map: tex, fog: false }),
+            new THREE.PlaneGeometry(piece.photoW || piece.w, piece.photoH || piece.h),
+            new THREE.MeshBasicMaterial({ map: tex, shadowSide: THREE.DoubleSide }),
           );
-          pic.position.z = 0.001;
+          const lift = ((piece.bottomMargin || 0) - (piece.topMargin || 0)) / 2;
+          pic.position.set(0, lift, 0.003);
+          pic.castShadow = true;
           sheet.add(pic);
         }
       }
     });
 
     const tagW = TAG_W;
-    const tagH = 0.84;
+    const tagH = TAG_H;
     const tagX = laid.row / 2 + TAG_GAP + tagW / 2 - centerNudge;
     const tagPivot = new THREE.Group();
-    tagPivot.position.set(tagX, 0, 0.02);
+    tagPivot.position.set(tagX, sagAt(home.x + tagX), 0.02);
+    tagPivot.rotation.z = (hash(index + 40)() - 0.5) * 0.05;
     addPeg(tagPivot, 0);
     const tag = new THREE.Mesh(
       new THREE.PlaneGeometry(tagW, tagH),
-      new THREE.MeshBasicMaterial({ map: tagTexture(entry.project, renderer), toneMapped: false, fog: false }),
+      new THREE.MeshBasicMaterial({ map: tagTexture(entry.project, renderer), toneMapped: false, shadowSide: THREE.DoubleSide }),
     );
-    tag.position.y = -(0.055 + tagH / 2);
+    tag.castShadow = true;
+    tag.position.y = -(0.045 + tagH / 2);
     tagPivot.add(tag);
     pivots.push(tagPivot);
     cluster.add(tagPivot);
-    bottom = Math.min(bottom, tag.position.y - tagH / 2);
+    bottom = Math.min(bottom, tagPivot.position.y + tag.position.y - tagH / 2);
 
     const href = entry.project.links?.[0]?.href;
     if (href) {
       const visitH = 0.2;
       const visit = new THREE.Mesh(
         new THREE.PlaneGeometry(0.5, visitH),
-        new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false }),
+        new THREE.MeshBasicMaterial({ map: visitMap, toneMapped: false, fog: false, shadowSide: THREE.DoubleSide }),
       );
-      visit.position.y = tag.position.y - tagH / 2 - 0.045 - visitH / 2;
+      visit.position.y = tag.position.y - tagH / 2 - 0.03 - visitH / 2;
+      visit.castShadow = true;
       visit.userData.href = href;
       tagPivot.add(visit);
       visits.push(visit);
@@ -498,10 +569,46 @@ export async function createDesign(renderer, { reduce, projects }) {
     veil.renderOrder = 4;
     cluster.add(veil);
 
+    const cord = new THREE.Group();
+    const cordLeft = left - 0.2;
+    const cordRight = right + 0.2;
+    const cordPts = [];
+    for (let s = 0; s <= 28; s++) {
+      const lx = cordLeft + ((cordRight - cordLeft) * s) / 28;
+      cordPts.push(new THREE.Vector3(lx, sagAt(home.x + lx), 0.004));
+    }
+    const cordMat = twineMat.clone();
+    cordMat.transparent = true;
+    cordMat.opacity = 0;
+    const cordMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cordPts), 40, 0.02, 5, false),
+      cordMat,
+    );
+    cordMesh.castShadow = true;
+    cord.add(cordMesh);
+    const cordMetal = metalMat.clone();
+    cordMetal.transparent = true;
+    cordMetal.opacity = 0;
+    [cordLeft, cordRight].forEach((lx) => {
+      const hook = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.009, 8, 16), cordMetal);
+      ring.rotation.y = Math.PI / 2;
+      ring.castShadow = true;
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.006, 0.04, 6), cordMetal);
+      screw.rotation.x = Math.PI / 2;
+      screw.position.z = -0.016;
+      screw.castShadow = true;
+      hook.add(ring, screw);
+      hook.position.set(lx, sagAt(home.x + lx), 0.006);
+      cord.add(hook);
+    });
+    cord.visible = false;
+    cluster.add(cord);
+
     lineGroup.position.copy(home);
     scene.add(lineGroup);
 
-    const frontY = 1.5 - bottom / 2;
+    const frontY = 2.72 - (bottom / 2) * FOCUS_SCALE;
     lines.push({
       project: entry.project,
       group: lineGroup,
@@ -512,10 +619,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       scroll: cluster.userData.scroll || null,
       home,
       front: new THREE.Vector3(0, frontY, FRONT_Z),
-      back: new THREE.Vector3(home.x, home.y, home.z - 1.2),
+      back: home.clone(),
       from: home.clone(),
       to: home.clone(),
-      wireHalf: slot.span,
       shiftHome: 0,
       shiftFrom: 0,
       shiftTo: 0,
@@ -527,6 +633,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       left,
       right,
       bottom,
+      cord,
+      cordMats: [cordMat, cordMetal],
     });
   });
 
@@ -539,14 +647,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
 
-  function updateFog() {
-    fogPoint.set(0, 1.6, -3);
-    const reach = Math.max(6, camera.position.distanceTo(fogPoint));
-    scene.fog.near = reach + 8;
-    scene.fog.far = reach + 28;
-  }
-
-  function fitPose(minX, maxX, minY, maxY, lookZ, fill) {
+  function fitPose(minX, maxX, minY, maxY, lookZ, fill, oblique) {
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     const spanX = Math.max(0.4, maxX - minX);
@@ -557,41 +658,44 @@ export async function createDesign(renderer, { reduce, projects }) {
       spanY / (2 * tanV * fill),
       spanX / (2 * tanV * aspect * fill),
     );
-    camTarget.set(cx, cy, lookZ + dist);
-    lookTarget.set(cx, cy, lookZ);
+    const side = dist * (oblique || 0);
+    const pull = dist * (1 + Math.abs(oblique || 0) * 0.35);
+    camTarget.set(cx + side, cy, lookZ + pull);
+    lookTarget.set(cx + side * 0.12, cy, lookZ);
   }
 
   function overviewPose() {
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = 0.08;
-    let maxY = 1;
-    let zSum = 0;
+    let minY = 0.15;
+    let maxY = TOP_Y + 0.2;
     lines.forEach((line) => {
-      const x = line.home.x;
-      const y = line.home.y;
-      minX = Math.min(minX, x - line.wireHalf, x + line.left);
-      maxX = Math.max(maxX, x + line.wireHalf, x + line.right);
-      minY = Math.min(minY, y + line.bottom);
-      maxY = Math.max(maxY, y + 0.06);
-      zSum += line.home.z;
+      minY = Math.min(minY, line.home.y + line.bottom);
+      maxY = Math.max(maxY, line.home.y + 0.08);
     });
-    const lookZ = lines.length ? zSum / lines.length : -3;
-    const padX = narrow ? 0.18 : 0.32;
-    const padY = narrow ? 0.12 : 0.26;
-    fitPose(minX - padX, maxX + padX, minY - padY, maxY + padY, lookZ, narrow ? 0.93 : 0.88);
+    const padX = narrow ? 0.45 : 0.7;
+    const padY = narrow ? 0.28 : 0.42;
+    fitPose(
+      -WALL_HALF - padX,
+      WALL_HALF + padX,
+      minY - padY,
+      maxY + padY,
+      0,
+      narrow ? 0.84 : 0.8,
+      narrow ? 0.28 : 0.78,
+    );
   }
 
   function focusPose(line) {
+    const s = FOCUS_SCALE;
     const y = line.front.y;
     const z = line.front.z;
     fitPose(
-      line.left - 0.16,
-      line.right + 0.18,
-      y + line.bottom - 0.1,
-      y + 0.16,
+      line.left * s - 0.34,
+      line.right * s + 0.36,
+      y + line.bottom * s - 0.1,
+      y + 0.12,
       z,
       narrow ? 0.9 : 0.86,
+      narrow ? 0.04 : 0.1,
     );
   }
 
@@ -624,6 +728,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     });
   }
 
+  function cordOpacity(line) {
+    const d = line.group.position.distanceTo(line.home);
+    return Math.min(1, Math.max(0, (d - 0.05) / 0.4));
+  }
+
+  function paintCord(line) {
+    const opacity = cordOpacity(line);
+    line.cord.visible = opacity > 0.03;
+    line.cordMats.forEach((mat) => { mat.opacity = opacity; });
+  }
+
   function aim(next, snap) {
     const count = lines.length + 1;
     slot = ((next % count) + count) % count;
@@ -635,7 +750,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     lines.forEach((line, i) => {
       line.from.copy(line.group.position);
       line.shiftFrom = line.cluster.position.x;
-      line.scaleFrom = line.cluster.scale.x;
+      line.scaleFrom = line.group.scale.x;
       line.opFrom = line.veil.material.opacity;
       if (focus < 0) {
         line.to.copy(line.home);
@@ -646,14 +761,14 @@ export async function createDesign(renderer, { reduce, projects }) {
       } else if (i === focus) {
         line.to.copy(line.front);
         line.shiftTo = 0;
-        line.scaleTo = 1;
+        line.scaleTo = FOCUS_SCALE;
         line.opTo = 0;
         line.swingStart = snap || reduce ? -1 : performance.now();
       } else {
         line.to.copy(line.back);
         line.shiftTo = line.shiftHome;
-        line.scaleTo = 0.9;
-        line.opTo = 0.5;
+        line.scaleTo = 1;
+        line.opTo = 0.52;
         line.swingStart = -1;
       }
       line.veil.renderOrder = i === focus ? 2 : 5;
@@ -664,14 +779,14 @@ export async function createDesign(renderer, { reduce, projects }) {
       lines.forEach((line) => {
         line.group.position.copy(line.to);
         line.cluster.position.x = line.shiftTo;
-        line.cluster.scale.setScalar(line.scaleTo);
+        line.group.scale.setScalar(line.scaleTo);
         line.veil.material.opacity = line.opTo;
         line.pivots.forEach((pivot) => { pivot.rotation.x = 0; });
+        paintCord(line);
       });
       camera.position.copy(camTo);
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
-      updateFog();
       return;
     }
     camFrom.copy(camera.position);
@@ -687,7 +802,6 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
     }
-    updateFog();
   }
 
   function resize(w, h) {
@@ -715,8 +829,9 @@ export async function createDesign(renderer, { reduce, projects }) {
         line.group.position.lerpVectors(line.from, line.to, e);
         line.cluster.position.x = line.shiftFrom + (line.shiftTo - line.shiftFrom) * e;
         const s = line.scaleFrom + (line.scaleTo - line.scaleFrom) * e;
-        line.cluster.scale.setScalar(s);
+        line.group.scale.setScalar(s);
         line.veil.material.opacity = line.opFrom + (line.opTo - line.opFrom) * e;
+        paintCord(line);
       }
       const on = i === focus;
       line.pivots.forEach((pivot, k) => {
@@ -749,7 +864,6 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookNow.lerpVectors(lookFrom, lookTo, e);
     }
     camera.lookAt(lookNow);
-    updateFog();
   }
 
   function step(dir) {
@@ -789,7 +903,6 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   aim(0, true);
-
   return {
     scene,
     camera,
