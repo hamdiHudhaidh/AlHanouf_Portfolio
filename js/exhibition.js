@@ -254,12 +254,15 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   scene.environmentIntensity = 0.22;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
-  scene.add(new THREE.AmbientLight(0xfff5ea, 0.16));
-  scene.add(new THREE.HemisphereLight(0x6e6862, 0x2c2824, 0.38));
+  scene.add(new THREE.AmbientLight(0xfff5ea, 0.62));
+  scene.add(new THREE.HemisphereLight(0xc4beb6, 0x3a342e, 0.85));
+  const wallFill = new THREE.DirectionalLight(0xffecd4, 1.15);
+  wallFill.position.set(0.4, 4.2, 7);
+  scene.add(wallFill);
 
   const wall = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 10),
-    new THREE.MeshStandardMaterial({ map: wallTexture(), color: 0x3a3834, roughness: 0.94 }),
+    new THREE.MeshStandardMaterial({ map: wallTexture(), color: 0xffffff, roughness: 0.92 }),
   );
   wall.position.y = 2.6;
   wall.receiveShadow = true;
@@ -315,7 +318,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   const poolMap = poolTexture();
   works.forEach((p) => {
     const x = p.x;
-    const spot = new THREE.SpotLight(0xffe0b0, 46, 8.5, 0.42, 0.42, 1.15);
+    const spot = new THREE.SpotLight(0xffe0b0, 24, 8.5, 0.46, 0.5, 1.05);
     spot.position.set(x, 4.7, 2.5);
     spot.target.position.set(x, 2.15, 0.08);
     scene.add(spot, spot.target);
@@ -369,6 +372,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         transparent: true,
         depthWrite: false,
         toneMapped: false,
+        fog: false,
       }),
     );
     plaque.renderOrder = 2;
@@ -421,13 +425,13 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       return { x: work.x + 0.62, y: 1.22, w, h, z: 0.04 };
     }
     if (narrow) {
-      const w = 1.2;
+      const w = 1.45;
       const h = w / aspect;
-      return { x: work.x, y: b.minY - 0.08 - h / 2, w, h, z: 0.04 };
+      return { x: work.x, y: b.minY - 0.06 - h / 2, w, h, z: 0.08 };
     }
-    const w = 0.7;
+    const w = 1.02;
     const h = w / aspect;
-    return { x: b.maxX + 0.1 + w / 2, y: b.minY + 0.04 + h / 2, w, h, z: 0.04 };
+    return { x: b.maxX + 0.05 + w / 2, y: b.minY + 0.08 + h / 2, w, h, z: 0.08 };
   }
 
   function layoutLabels() {

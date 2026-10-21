@@ -17,7 +17,7 @@ const HOLE_X = 0.108;
 const RING_Z = 0.02;
 const RING_Y = [0.46, 0, -0.46];
 const TAB_W = 0.22;
-const SECTION_COLORS = ['#a8603f', '#8c4a2f', '#c49a6c', '#5e4636', '#7a5344', '#3f3833', '#b08968', '#6d4c3d'];
+const SECTION_COLORS = ['#a8603f', '#8c4a2f', '#c49a6c', '#6b5344', '#8d6552', '#5c4e45', '#b08968', '#7a5644'];
 const CREAM = '#f3eee6';
 const PAPER = '#f3eee6';
 const INK = '#1d1b19';
@@ -335,8 +335,10 @@ function coverFooter() {
 
 function tabTexture(title, fg) {
   const canvas = document.createElement('canvas');
-  canvas.width = 320;
-  canvas.height = 720;
+  // Wider than tall, matching the tab: the word runs along the short side
+  // and the letter height sits in the stick-out, without stretching.
+  canvas.width = 640;
+  canvas.height = 440;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
@@ -346,26 +348,26 @@ function tabTexture(title, fg) {
   ctx.textBaseline = 'middle';
   const raw = String(title || '').toUpperCase();
   const words = raw.split(/\s+/).filter(Boolean);
-  const lines = words.length >= 2 && raw.length > 9 ? words : [raw];
-  const along = 640;
-  const across = 280;
-  let size = lines.length > 1 ? 78 : 96;
-  const trackingFor = (px) => (px > 48 ? 1.6 : 0.4);
+  const lines = words.length >= 2 && raw.replace(/\s+/g, '').length > 8 ? words : [raw];
+  const along = 400;
+  const across = 560;
+  let size = lines.length > 1 ? 118 : 150;
+  const trackingFor = (px) => (px > 72 ? 2 : 0.5);
   const fits = () => {
     ctx.font = `800 ${size}px Inter`;
     const tracking = trackingFor(size);
     const widest = Math.max(...lines.map((line) => trackedWidth(ctx, line, tracking)));
-    const block = size * lines.length + 10 * (lines.length - 1);
+    const block = size * lines.length + size * 0.18 * (lines.length - 1);
     return widest <= along && block <= across;
   };
-  while (size > 28 && !fits()) size -= 2;
+  while (size > 34 && !fits()) size -= 2;
   ctx.font = `800 ${size}px Inter`;
   const tracking = trackingFor(size);
-  const block = size * lines.length + 10 * (lines.length - 1);
+  const block = size * lines.length + size * 0.18 * (lines.length - 1);
   let y = -block / 2 + size / 2;
   lines.forEach((line) => {
     fillTracked(ctx, line, 0, y, 'center', tracking);
-    y += size + 10;
+    y += size + size * 0.18;
   });
   ctx.restore();
   const tex = new THREE.CanvasTexture(canvas);
@@ -859,15 +861,17 @@ export async function createDesign(renderer, { reduce, projects }) {
   const tabH = tabSpan * 0.9;
   const tabGeo = tabGeometry(TAB_W, tabH);
   const tabs = sections.map((section, i) => {
-    const fg = luminance(section.color) > 0.62 ? INK : '#f3eee6';
+    const fg = luminance(section.color) > 0.5 ? INK : '#f6f1e8';
     const group = new THREE.Group();
     group.userData.slot = section.first + 1;
     const body = new THREE.Mesh(
       tabGeo,
       new THREE.MeshBasicMaterial({ color: section.color, side: THREE.DoubleSide }),
     );
+    const labelW = TAB_W * 0.88;
+    const labelH = Math.min(tabH * 0.9, labelW * (440 / 640));
     const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(TAB_W * 0.84, tabH * 0.82),
+      new THREE.PlaneGeometry(labelW, labelH),
       new THREE.MeshBasicMaterial({ map: tabTexture(section.label, fg), transparent: true, depthWrite: false }),
     );
     label.position.z = 0.012;
@@ -1057,19 +1061,19 @@ export async function createDesign(renderer, { reduce, projects }) {
       halfH = PAGE_H / 2 + 0.04;
       focusX = (left + right) / 2;
     } else {
-      halfW = GUTTER + PAGE_W + TAB_W + 0.05;
+      halfW = GUTTER + PAGE_W + TAB_W + (narrow ? 0.1 : 0.05);
       halfH = PAGE_H / 2 + 0.04;
       focusX = 0;
     }
     const distV = halfH / (tanV * usable * 0.93);
-    const distH = halfW / (tanH * (narrow ? 0.88 : 0.93));
-    const dist = Math.max(distV, distH) * (narrow ? 1.02 : 1.04);
+    const distH = halfW / (tanH * (narrow ? 0.94 : 0.93));
+    const dist = Math.max(distV, distH) * (narrow ? 1.0 : 1.04);
     const topLimit = 1 - 2 * top;
     const botLimit = -1 + 2 * bottom;
     const safeCenter = (topLimit + botLimit) / 2;
     const look = new THREE.Vector3(focusX, focusY - dist * tanV * safeCenter, 0);
-    const ox = narrow ? 0.04 : 0.2;
-    const oy = narrow ? 0.05 : 0.16;
+    const ox = narrow ? 0 : 0.2;
+    const oy = narrow ? 0.02 : 0.16;
     const pos = new THREE.Vector3(look.x + ox, look.y + oy, dist);
     return { pos, look, fov, roll: narrow ? -0.012 : 0.03 };
   }
