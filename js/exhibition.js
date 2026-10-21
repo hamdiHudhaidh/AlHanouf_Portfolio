@@ -3,8 +3,8 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 
 // Art is a gallery wall. 00 is the whole room, pulled back far enough that
 // the tops of the pieces stay in frame. Each later number glides to one work.
-// The museum label is a plane in the room: beside the piece on a wide screen,
-// below it on a tall one.
+// The label is printed on the wall itself. A line is omitted when the piece
+// has no data for it.
 
 function sampleSculpture(x) {
   const pts = [];
@@ -63,90 +63,219 @@ function wrapLines(g, text, x, y, maxW, lineH, maxLines) {
 
 function labelTexture(piece, renderer) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1280;
-  canvas.height = 800;
+  canvas.width = 900;
+  canvas.height = 640;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#f7f1e8';
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  g.strokeStyle = 'rgba(29,27,25,0.45)';
-  g.lineWidth = 8;
-  g.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
-
-  let y = 118;
-  g.textBaseline = 'alphabetic';
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.fillStyle = 'rgba(255, 250, 244, 0.96)';
+  g.textAlign = 'left';
+  g.textBaseline = 'top';
+  let y = 6;
+  const left = 4;
   if (piece.artist) {
-    g.fillStyle = '#5b554d';
-    g.font = '500 52px Inter, sans-serif';
-    g.fillText(piece.artist, 72, y);
-    y += 36;
-    g.strokeStyle = 'rgba(29,27,25,0.22)';
-    g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(72, y);
-    g.lineTo(520, y);
-    g.stroke();
-    y += 130;
-  } else {
-    y += 70;
+    g.font = '800 76px Inter, sans-serif';
+    g.fillText(piece.artist, left, y);
+    y += 88;
   }
-
-  const title = [piece.title, piece.year].filter(Boolean).join(', ');
-  if (title) {
-    g.fillStyle = '#1d1b19';
-    g.font = '500 148px Cormorant, serif';
-    wrapLines(g, title, 72, y, 1120, 156, 2);
-    y += title.length > 22 ? 320 : 170;
+  const life = [piece.place, piece.life].filter(Boolean).join('  ');
+  if (life) {
+    g.font = '400 34px Inter, sans-serif';
+    g.fillText(life, left, y);
+    y += 48;
   }
-
-  const facts = [piece.medium, piece.dimensions].filter(Boolean).join(' · ');
+  if (piece.title || piece.year) {
+    const title = piece.title || '';
+    g.font = 'italic 500 68px Cormorant, serif';
+    if (title) g.fillText(title, left, y);
+    if (piece.year) {
+      const tw = title ? g.measureText(title).width + 18 : 0;
+      g.font = '400 36px Inter, sans-serif';
+      g.fillText(String(piece.year), left + tw, y + 22);
+    }
+    y += 82;
+  }
+  const facts = [piece.medium, piece.dimensions].filter(Boolean).join(', ');
   if (facts) {
-    g.fillStyle = '#5b554d';
-    g.font = '400 44px Inter, sans-serif';
-    g.fillText(facts, 72, y);
-    y += 70;
+    g.font = '400 32px Inter, sans-serif';
+    g.fillText(facts, left, y);
+    y += 44;
   }
   if (piece.description) {
-    g.fillStyle = '#1d1b19';
-    g.font = '400 58px Inter, sans-serif';
-    wrapLines(g, piece.description, 72, y, 1120, 74, 4);
+    g.font = '400 28px Inter, sans-serif';
+    wrapLines(g, piece.description, left, y, 880, 36, 3);
+    const lines = Math.min(3, Math.ceil(g.measureText(piece.description).width / 880) || 1);
+    y += lines * 36 + 8;
   }
-
-  const tex = new THREE.CanvasTexture(canvas);
+  const used = Math.max(48, Math.min(canvas.height, Math.ceil(y + 8)));
+  const tight = document.createElement('canvas');
+  tight.width = canvas.width;
+  tight.height = used;
+  tight.getContext('2d').drawImage(canvas, 0, 0, canvas.width, used, 0, 0, canvas.width, used);
+  const tex = new THREE.CanvasTexture(tight);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   tex.needsUpdate = true;
+  return { tex, aspect: tight.width / tight.height };
+}
+
+function wallTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#3a3834';
+  g.fillRect(0, 0, 512, 512);
+  const img = g.getImageData(0, 0, 512, 512);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 26;
+    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
+    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n * 0.94));
+    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n * 0.82));
+  }
+  g.putImageData(img, 0, 0);
+  g.strokeStyle = 'rgba(255,255,255,0.03)';
+  for (let i = 0; i < 18; i += 1) {
+    g.lineWidth = 8 + Math.random() * 20;
+    g.beginPath();
+    const y = Math.random() * 512;
+    g.moveTo(0, y);
+    g.bezierCurveTo(160, y + 12, 340, y - 10, 512, y + 4);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(5, 2.4);
   return tex;
+}
+
+function woodTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#7a4e30';
+  g.fillRect(0, 0, 256, 512);
+  for (let i = 0; i < 90; i += 1) {
+    const y = Math.random() * 512;
+    g.strokeStyle = `rgba(${70 + Math.random() * 50},${32 + Math.random() * 24},${12},${0.18 + Math.random() * 0.4})`;
+    g.lineWidth = 1 + Math.random() * 3.2;
+    g.beginPath();
+    g.moveTo(0, y);
+    g.bezierCurveTo(80, y + Math.random() * 14 - 7, 170, y + Math.random() * 14 - 7, 256, y + Math.random() * 6 - 3);
+    g.stroke();
+  }
+  for (let i = 0; i < 16; i += 1) {
+    g.fillStyle = `rgba(40, 18, 8, ${0.08 + Math.random() * 0.12})`;
+    g.fillRect(Math.random() * 256, Math.random() * 512, 8 + Math.random() * 30, 2 + Math.random() * 5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1.2, 2);
+  return tex;
+}
+
+function poolTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 512;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 200, 10, 256, 230, 255);
+  gr.addColorStop(0, 'rgba(255, 214, 160, 0.72)');
+  gr.addColorStop(0.42, 'rgba(255, 186, 110, 0.28)');
+  gr.addColorStop(1, 'rgba(255, 170, 90, 0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 512, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function addWoodFrame(scene, x, y, w, h, mat) {
+  const group = new THREE.Group();
+  const depth = 0.1;
+  const mould = 0.11;
+  const bars = [
+    [0, h / 2 - mould / 2, w, mould],
+    [0, -h / 2 + mould / 2, w, mould],
+    [-w / 2 + mould / 2, 0, mould, h - mould * 2],
+    [w / 2 - mould / 2, 0, mould, h - mould * 2],
+  ];
+  bars.forEach(([bx, by, bw, bh]) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth), mat);
+    mesh.position.set(bx, by, 0);
+    mesh.castShadow = true;
+    group.add(mesh);
+  });
+  const beadMat = mat.clone();
+  beadMat.color = new THREE.Color('#c4a27a');
+  const bead = 0.03;
+  const innerW = w - mould * 2;
+  const innerH = h - mould * 2;
+  const beads = [
+    [0, innerH / 2 - bead / 2, innerW, bead],
+    [0, -innerH / 2 + bead / 2, innerW, bead],
+    [-innerW / 2 + bead / 2, 0, bead, innerH - bead * 2],
+    [innerW / 2 - bead / 2, 0, bead, innerH - bead * 2],
+  ];
+  beads.forEach(([bx, by, bw, bh]) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth * 0.45), beadMat);
+    mesh.position.set(bx, by, depth * 0.28);
+    group.add(mesh);
+  });
+  const lipMat = mat.clone();
+  lipMat.color = new THREE.Color('#4e301c');
+  const lip = 0.028;
+  const lips = [
+    [0, h / 2 + lip / 2, w + lip * 2, lip],
+    [0, -h / 2 - lip / 2, w + lip * 2, lip],
+    [-w / 2 - lip / 2, 0, lip, h],
+    [w / 2 + lip / 2, 0, lip, h],
+  ];
+  lips.forEach(([bx, by, bw, bh]) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth * 0.55), lipMat);
+    mesh.position.set(bx, by, -0.01);
+    group.add(mesh);
+  });
+  group.position.set(x, y, 0.045);
+  scene.add(group);
 }
 
 export async function createExhibition(renderer, { reduce, pieces }) {
   const scene = new THREE.Scene();
-  const BG = new THREE.Color('#e6dfd4');
+  const BG = new THREE.Color('#2a2826');
   scene.background = BG;
   scene.fog = new THREE.Fog(BG, 24, 48);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0.22;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
-  scene.add(new THREE.AmbientLight(0xfff5ea, 0.35));
-  scene.add(new THREE.HemisphereLight(0xfff8f0, 0xb7aa9a, 0.45));
+  scene.add(new THREE.AmbientLight(0xfff5ea, 0.62));
+  scene.add(new THREE.HemisphereLight(0xc4beb6, 0x3a342e, 0.85));
+  const wallFill = new THREE.DirectionalLight(0xffecd4, 1.15);
+  wallFill.position.set(0.4, 4.2, 7);
+  scene.add(wallFill);
 
   const wall = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 10),
-    new THREE.MeshStandardMaterial({ color: 0xe7e0d6, roughness: 0.94 }),
+    new THREE.MeshStandardMaterial({ map: wallTexture(), color: 0xffffff, roughness: 0.92 }),
   );
   wall.position.y = 2.6;
   wall.receiveShadow = true;
   scene.add(wall);
   const rail = new THREE.Mesh(
     new THREE.BoxGeometry(40, 0.035, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0xcfc6ba, roughness: 0.5, metalness: 0.15 }),
+    new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.45, metalness: 0.35 }),
   );
   rail.position.set(0, 4.15, 0.02);
   scene.add(rail);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 24),
-    new THREE.MeshStandardMaterial({ color: 0xcfc4b6, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0x4a433c, roughness: 0.92 }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.z = 4;
@@ -154,7 +283,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   scene.add(floor);
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(40, 0.16, 0.12),
-    new THREE.MeshStandardMaterial({ color: 0xb7aea2, roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: 0x3a342e, roughness: 0.7 }),
   );
   base.position.set(0, 0.08, 0.04);
   scene.add(base);
@@ -180,12 +309,30 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }));
 
   const labels = [];
+  const wood = new THREE.MeshStandardMaterial({
+    map: woodTexture(),
+    color: 0xd2b48c,
+    roughness: 0.58,
+    metalness: 0.04,
+  });
+  const poolMap = poolTexture();
   works.forEach((p) => {
     const x = p.x;
-    const spot = new THREE.SpotLight(0xfff4e6, 8, 9, 0.45, 0.6, 1);
-    spot.position.set(x, 4.3, 2.2);
-    spot.target.position.set(x, 1.8, 0);
+    const spot = new THREE.SpotLight(0xffe0b0, 24, 8.5, 0.46, 0.5, 1.05);
+    spot.position.set(x, 4.7, 2.5);
+    spot.target.position.set(x, 2.15, 0.08);
     scene.add(spot, spot.target);
+    const pool = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.1, 3.6),
+      new THREE.MeshBasicMaterial({
+        map: poolMap,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    pool.position.set(x, 2.35, 0.012);
+    scene.add(pool);
 
     if (p.kind === 'sculpture') {
       const plinth = new THREE.Mesh(
@@ -206,33 +353,31 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         scene.add(sampleSculpture(x));
       }
     } else {
-      const frame = new THREE.Mesh(
-        new THREE.BoxGeometry(1.55, 1.9, 0.06),
-        new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.5 }),
-      );
-      frame.position.set(x, 2.15, 0.04);
-      scene.add(frame);
+      addWoodFrame(scene, x, 2.15, 1.82, 2.18, wood);
       if (p.tex) {
         const art = new THREE.Mesh(
           new THREE.PlaneGeometry(1.38, 1.72),
           new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 }),
         );
-        art.position.set(x, 2.15, 0.08);
+        art.position.set(x, 2.15, 0.04);
         scene.add(art);
       }
     }
 
+    const made = labelTexture(p, renderer);
     const plaque = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({
-        map: labelTexture(p, renderer),
+        map: made.tex,
+        transparent: true,
+        depthWrite: false,
         toneMapped: false,
         fog: false,
       }),
     );
     plaque.renderOrder = 2;
     scene.add(plaque);
-    labels.push({ work: p, mesh: plaque });
+    labels.push({ work: p, mesh: plaque, aspect: made.aspect });
   });
 
   if (!works.length) {
@@ -267,33 +412,31 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     if (work.kind === 'sculpture') {
       return { minX: work.x - 0.5, maxX: work.x + 0.5, minY: 0.02, maxY: 2.08, z: 1.05 };
     }
-    return { minX: work.x - 0.84, maxX: work.x + 0.84, minY: 1.12, maxY: 3.18, z: 0 };
+    return { minX: work.x - 0.98, maxX: work.x + 0.98, minY: 0.98, maxY: 3.32, z: 0 };
   }
 
-  function labelBox(work) {
+  function labelBox(label) {
+    const work = label.work;
+    const aspect = label.aspect || 2.4;
     const b = pieceBox(work);
-    if (narrow) {
-      const lw = work.kind === 'sculpture' ? 1.5 : 1.7;
-      const lh = 1.02;
-      const top = work.kind === 'sculpture' ? 0.92 : b.minY - 0.08;
-      const y = Math.max(lh / 2 + 0.08, top - lh / 2);
-      const z = work.kind === 'sculpture' ? 1.62 : 0.14;
-      return { x: work.x, y, w: lw, h: lh, z };
+    if (work.kind === 'sculpture') {
+      const w = narrow ? 0.92 : 0.7;
+      const h = w / aspect;
+      return { x: work.x + 0.62, y: 1.22, w, h, z: 0.04 };
     }
-    const lw = 1.08;
-    const lh = 0.96;
-    return {
-      x: b.maxX + 0.22 + lw / 2,
-      y: work.kind === 'sculpture' ? 1.12 : 1.7,
-      w: lw,
-      h: lh,
-      z: work.kind === 'sculpture' ? 1.28 : 0.14,
-    };
+    if (narrow) {
+      const w = 1.45;
+      const h = w / aspect;
+      return { x: work.x, y: b.minY - 0.06 - h / 2, w, h, z: 0.08 };
+    }
+    const w = 1.02;
+    const h = w / aspect;
+    return { x: b.maxX + 0.05 + w / 2, y: b.minY + 0.08 + h / 2, w, h, z: 0.08 };
   }
 
   function layoutLabels() {
     labels.forEach((label) => {
-      const box = labelBox(label.work);
+      const box = labelBox(label);
       label.mesh.position.set(box.x, box.y, box.z);
       label.mesh.scale.set(box.w, box.h, 1);
     });
@@ -333,7 +476,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     let maxY = -Infinity;
     works.forEach((work) => {
       const b = pieceBox(work);
-      const l = labelBox(work);
+      const l = labelBox(labels.find((label) => label.work === work) || { work, aspect: 2.4 });
       minX = Math.min(minX, b.minX, l.x - l.w / 2);
       maxX = Math.max(maxX, b.maxX, l.x + l.w / 2);
       minY = Math.min(minY, b.minY, l.y - l.h / 2, 0);
@@ -350,7 +493,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
 
   function poseFor(work) {
     const b = pieceBox(work);
-    const l = labelBox(work);
+    const l = labelBox(labels.find((label) => label.work === work) || { work, aspect: 2.4 });
     const minX = Math.min(b.minX, l.x - l.w / 2) - 0.2;
     const maxX = Math.max(b.maxX, l.x + l.w / 2) + 0.22;
     const minY = Math.min(b.minY, l.y - l.h / 2) - 0.16;

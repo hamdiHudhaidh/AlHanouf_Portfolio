@@ -215,7 +215,7 @@ async function ensure(id) {
   const run = (async () => {
     await document.fonts.ready.catch(() => {});
     const r = getRenderer();
-    if (id === 'ceramics') view.ceramics = createCeramics(r, { reduce, projects: CERAMICS });
+    if (id === 'ceramics') view.ceramics = await createCeramics(r, { reduce, projects: CERAMICS });
     if (id === 'design') view.design = await createDesign(r, { reduce, projects: DESIGN });
     if (id === 'art') view.art = await createExhibition(r, { reduce, pieces: EXHIBITION });
     const box = viewBox();

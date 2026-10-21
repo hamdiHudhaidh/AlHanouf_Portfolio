@@ -13,17 +13,17 @@ The page has four scenes: About, Ceramics, Design, and Art. About is a still edi
 | Scene | Hash | What you see |
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, LinkedIn and WhatsApp |
-| Ceramics | `#ceramics` | The wheel. Three sample vessels spin, morph, and open with a splatter |
-| Design | `#design` | A ring binder on black. 00 is the cover. Each later number opens that project |
-| Art | `#art` | Gallery wall. 00 is the whole room. Three sample paintings and one sample sculpture, each with a museum label in the room |
+| Ceramics | `#ceramics` | The wheel. Three sample vessels are thrown in clay, then shown with their own photo |
+| Design | `#design` | A ring binder. 00 is the cover. Projects are grouped by category, and the first of each group has a divider tab |
+| Art | `#art` | Dark gallery wall. 00 is the whole room. Three sample paintings in carved wood frames and one sample sculpture, each with a wall label |
 
 `#exhibition` opens Art and the address bar becomes `#art`.
 
 The current page name sits at the top left. The previous page name sits at the bottom left, and the next page name at the bottom right. Art’s next page is About, and About’s previous page is Art. The counter and arrows stay at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item.
 
-On the binder, 00 is the closed cover: a cream page, her name, and the word Design, with a metal 3-ring spine on the left and a coloured index tab for every project on the right. 01 and onward are her projects, in the order they appear in `DESIGN`. The arrows, the counter, and a click on a tab open the binder in one shot. The page turns around the rings, and the camera eases to the spread. The open spread is the colour of that project’s tab. The left page carries the title and the cover picture. The right page carries her description, when she published one, and the rest of the project: the other stills, film strips, or the site. Tabs of projects already passed sit on the left edge. The current tab and the ones after it stay on the right. A tall screen frames one page at a time, large enough to read, clear of the top bar and the counter. A project she published as video plays those clips muted and looped only while that project is open, and shows a poster frame otherwise. The website project shows a scrolling capture of the URL she published, with a Visit site tag that opens that URL in a new tab. The light is soft, and the page has a slight tilt.
+On the binder, 00 is the closed cover: a paper page, her name, and the word Design, with a metal 3-ring spine on the left. The projects are grouped so that every project of one category sits together. Only the first project of a category has a divider tab, and the tab is labelled with that category. The projects that follow it are plain pages of the same section, with no tab of their own. 01 and onward follow that grouped order. The arrows, the counter, and a click on a tab open the binder in one shot. A tab opens the first project of its category. The page turns around the rings, and the camera eases to the spread. Every page of a category uses that category’s paper colour. The left page carries the project title and the cover picture. The right page carries her description, when she published one, and the rest of the project: the other stills, film strips, or the site. A category tab stays on the right while any project in that category is open, and moves to the left only after the whole category has been passed. On the cover, every tab is on the right. A phone frames both pages of an open spread. The closed cover stays a single page. A project she published as video plays those clips muted and looped only while that project is open, and shows a poster frame otherwise. The website project shows a scrolling capture of the URL she published, with a Visit site tag that opens that URL in a new tab. The light is soft, and the page has a slight tilt.
 
-Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. The description is a museum label in the 3D room: beside the piece on a wide screen, and below it on a tall one.
+Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. Each painting hangs in a carved wood frame under a warm spotlight. The label is printed on the dark wall, not on a card: the artist, then place and life years only when those were given, then the italic title with the year, then the medium, then a short description. Any of those lines is left off when the piece has no data for it. On a wide screen the label sits beside the work. On a tall screen it sits below the painting, and beside the sculpture.
 
 About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Art if that list is emptied.
 
@@ -55,7 +55,7 @@ Everything you would change is in `js/projects.js`.
 
 **About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The page shows LinkedIn and WhatsApp only. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-**Design.** Each object in `DESIGN` is one project in the binder, and one coloured tab. The first still is the cover picture on the left page of that project. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. The title is set on the left page. `text` and `year` are set on the right page, and nowhere else. `images` is a list of stills under `assets/projects/<slug>/`. When `items` is set, those follow the cover on the right page: an `image` is another still, a `video` is a local mp4 with a poster frame (muted, looping, playing only while that project is open), and a `website` is a tall page. The website capture is a screenshot of the URL she published (`links`), saved as `assets/projects/website-design/page.webp`. The Visit site tag uses that same URL. `source` is the project page on the original portfolio.
+**Design.** Each object in `DESIGN` is one project in the binder. `category` is a word copied from that project’s title or text. Projects that share a category are shown together, and only the first of them grows a divider tab labelled with that word. The first still is the cover picture on the left page of that project. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. The title is set on the left page. `text` and `year` are set on the right page, and nowhere else. `images` is a list of stills under `assets/projects/<slug>/`. When `items` is set, those follow the cover on the right page: an `image` is another still, a `video` is a local mp4 with a poster frame (muted, looping, playing only while that project is open), and a `website` is a tall page. The website capture is a screenshot of the URL she published (`links`), saved as `assets/projects/website-design/page.webp`. The Visit site tag uses that same URL. `source` is the project page on the original portfolio.
 
 **Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
 
@@ -63,7 +63,7 @@ Everything you would change is in `js/projects.js`.
 { title: '', text: '', year: '', images: ['assets/projects/example/01.webp'], shape: 2 }
 ```
 
-`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. The photos open through the splatter after the wheel turns.
+`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. While the wheel is throwing, the piece stays clay. Once it has settled, the first image is wrapped onto the vessel. A piece with no image stays clay.
 
 **Art.** The `EXHIBITION` array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
 
@@ -71,7 +71,7 @@ Everything you would change is in `js/projects.js`.
 { kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
 ```
 
-`kind` is `painting` (on the wall) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The museum label in the room prints only the fields that are present.
+`kind` is `painting` (on the wall, in a wood frame) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The wall label prints only the fields that are present. `place` and `life` are optional and are not invented.
 
 ## Run locally
 

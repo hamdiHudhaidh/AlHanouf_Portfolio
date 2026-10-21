@@ -68,6 +68,8 @@ uniform float uA, uB, uT, uTime, uSpin, uRange;
 uniform vec3 uCamObj, uBMin, uBMax;
 uniform vec3 uKey, uFill, uClay;
 uniform vec2 uHelloSize, uMarkSize;
+uniform sampler2D uPhoto;
+uniform float uHasPhoto, uFinish, uSpan;
 varying vec3 vObj;
 
 float hash(vec3 p){ p = fract(p*0.3183099+.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
@@ -189,11 +191,16 @@ void main(){
   float tone = noise(p*4.0)*0.5 + noise(p*15.0)*0.25;
   vec3 alb = uClay * (0.85 + 0.25*tone);
   alb *= mix(0.72, 1.0, smoothstep(0.0, 0.25, p.y));
+  float shown = clamp(uFinish, 0.0, 1.0) * uHasPhoto;
+  float photoU = fract(atan(p.z, p.x) * 0.15915494 + 0.25);
+  float photoV = clamp(p.y / max(uSpan, 0.001), 0.0, 1.0);
+  vec3 photo = texture2D(uPhoto, vec2(photoU, photoV)).rgb;
+  alb = mix(alb, photo, shown);
   vec3 L1 = normalize(uKey), L2 = normalize(uFill);
   float dif = clamp(dot(n,L1)*0.5+0.5, 0.0, 1.0); dif = dif*dif;
   float dif2 = clamp(dot(n,L2), 0.0, 1.0);
   vec3 h = normalize(L1+v);
-  float wet = 0.55 + 0.45*uSpin;
+  float wet = (0.55 + 0.45*uSpin) * mix(1.0, 0.12, shown);
   float spec = pow(clamp(dot(n,h),0.0,1.0), 48.0) * 0.9 * wet;
   float spec2 = pow(clamp(dot(n,normalize(L2+v)),0.0,1.0), 24.0) * 0.12;
   float fres = pow(1.0 - clamp(dot(n,v),0.0,1.0), 4.0);
@@ -220,6 +227,10 @@ export function makeClay(textures) {
       uKey: { value: new THREE.Vector3(-2.5, 4, 3) }, uFill: { value: new THREE.Vector3(3, 1.5, -1) },
       uClay: { value: new THREE.Color(0.30, 0.135, 0.075) },
       uHelloSize: { value: new THREE.Vector2(HELLO.w, HELLO.h) }, uMarkSize: { value: new THREE.Vector2(MARK.w, MARK.h) },
+      uPhoto: { value: new THREE.Texture() },
+      uHasPhoto: { value: 0 },
+      uFinish: { value: 0 },
+      uSpan: { value: 1.42 },
     },
   });
   const mesh = new THREE.Mesh(geo, mat);
