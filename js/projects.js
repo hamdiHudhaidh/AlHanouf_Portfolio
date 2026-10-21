@@ -5,7 +5,10 @@
 // CERAMICS items: { title, text?, year?, images: [path], shape }
 //   shape 0 = the word hello, 2 = bottle, 3 = open bowl, 4 = tall vase. Use the closest lathe profile.
 // EXHIBITION items: { kind: 'painting' | 'sculpture', title, image?, artist?, year?, medium?, dimensions?, description? }
-// DESIGN items: { slug, title, text?, year?, images: [path], items?, source, links?: [{label, href}] }
+// DESIGN items: { slug, title, category, text?, year?, images: [path], items?, source, links?: [{label, href}] }
+//   category is a word copied from that project's title or text. It only groups
+//   the binder: same category stays together, and only the first page of the
+//   group gets a divider tab. Do not invent a word that is not in the project.
 //   items are the project's extra pieces in the binder, after the cover still:
 //   { kind: 'image' | 'video' | 'website', src, poster?, href? }
 //   video files are local copies of the clips on her project page. poster is a frame from that clip.
@@ -100,6 +103,7 @@ export const DESIGN = [
   {
     slug: 'peak-identity',
     title: 'peak identity',
+    category: 'identity',
     year: '2024',
     text: 'creating identity for an events management company .',
     images: pics('peak-identity', 6),
@@ -108,6 +112,7 @@ export const DESIGN = [
   {
     slug: 'parkit-idintity',
     title: 'parkit idintity',
+    category: 'identity',
     year: '2024',
     images: pics('parkit-idintity', 7),
     source: src('parkit-idintity'),
@@ -115,6 +120,7 @@ export const DESIGN = [
   {
     slug: 'brand-idintity',
     title: 'brand idintity',
+    category: 'identity',
     year: '2024',
     text: 'branding for Jwana skin care',
     images: pics('brand-idintity', 1),
@@ -123,6 +129,7 @@ export const DESIGN = [
   {
     slug: 'profile-design',
     title: 'profile design',
+    category: 'profile',
     year: '2024',
     text: 'profile Peak-events operation management company',
     images: pics('profile-design', 1),
@@ -131,6 +138,7 @@ export const DESIGN = [
   {
     slug: 'video-editing',
     title: 'video editing',
+    category: 'video',
     year: '2024',
     images: pics('video-editing', 1),
     items: [1, 2, 3, 4].map((n) => ({
@@ -143,6 +151,7 @@ export const DESIGN = [
   {
     slug: 'cube-design',
     title: 'cube design',
+    category: 'cube',
     year: '2024',
     images: pics('cube-design', 3),
     source: src('cube-design'),
@@ -150,6 +159,7 @@ export const DESIGN = [
   {
     slug: 'playing-card-design',
     title: 'playing card design',
+    category: 'playing card',
     year: '2024',
     images: pics('playing-card-design', 3),
     source: src('playing-card-design'),
@@ -157,6 +167,7 @@ export const DESIGN = [
   {
     slug: 'social-media-posts',
     title: 'Other Designs',
+    category: 'Other Designs',
     year: '2024',
     images: pics('social-media-posts', 3),
     items: [
@@ -172,6 +183,7 @@ export const DESIGN = [
   {
     slug: 'website-design',
     title: 'website design',
+    category: 'website',
     year: '2024',
     text: 'website for peak company',
     images: pics('website-design', 1),
@@ -193,6 +205,7 @@ export const DESIGN = [
   {
     slug: 'vest-design',
     title: 'vest design',
+    category: 'vest',
     year: '2024',
     images: pics('vest-design', 6),
     source: src('vest-design'),

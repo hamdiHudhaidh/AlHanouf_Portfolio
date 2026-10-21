@@ -5,7 +5,28 @@ import { makeTextures, makeClay } from './clay.js';
 const TAU = Math.PI * 2;
 const CONTACT = [[2.5, 0.9], [1.6, 0.9], [1.5, 1.5], [1.9, 1.9], [1.15, 1.15]];
 
-export function createCeramics(renderer, { reduce, projects }) {
+function spanFor(shape) {
+  if (shape < 2.5) return 1.42;
+  if (shape < 3.5) return 0.62;
+  return 1.52;
+}
+
+function loadPhoto(url, renderer) {
+  return new Promise((resolve) => {
+    if (!url) { resolve(null); return; }
+    const loader = new THREE.TextureLoader();
+    loader.load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tex.needsUpdate = true;
+      resolve(tex);
+    }, undefined, () => resolve(null));
+  });
+}
+
+export async function createCeramics(renderer, { reduce, projects }) {
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e8e1d6');
   scene.background = BG;
@@ -184,6 +205,10 @@ export function createCeramics(renderer, { reduce, projects }) {
   }
 
   const list = projects.length ? projects : [{ shape: 2, title: '', text: '', images: [], rest: true }];
+  const photos = await Promise.all(list.map((item) => loadPhoto(item.images && item.images[0], renderer)));
+  const blank = new THREE.DataTexture(new Uint8Array([180, 100, 70, 255]), 1, 1);
+  blank.colorSpace = THREE.SRGBColorSpace;
+  blank.needsUpdate = true;
   let cur = 0;
   let next = 0;
   let t = 0;
@@ -195,6 +220,15 @@ export function createCeramics(renderer, { reduce, projects }) {
   const N = list.length;
   const shapeOf = (i) => (list[(i + N) % N].shape ?? 2);
   U.uA.value = U.uB.value = shapeOf(0);
+
+  function showPhoto(i) {
+    const tex = photos[(i + N) % N];
+    U.uPhoto.value = tex || blank;
+    U.uHasPhoto.value = tex ? 1 : 0;
+    U.uSpan.value = spanFor(shapeOf(i));
+  }
+  showPhoto(0);
+  U.uFinish.value = 1;
 
   let hidden = false;
   let shownFor = -1;
@@ -231,6 +265,7 @@ export function createCeramics(renderer, { reduce, projects }) {
     shownFor = cur;
     U.uA.value = U.uB.value = shapeOf(cur);
     U.uT.value = 0;
+    showPhoto(cur);
   }
 
   const camObj = new THREE.Vector3();
@@ -261,6 +296,7 @@ export function createCeramics(renderer, { reduce, projects }) {
     wheel.rotation.y = angle;
     const spin = vel / MAXV;
     U.uT.value = trans ? Math.min(t, 1) : 0;
+    U.uFinish.value = (!trans && !hidden) ? 1 : 0;
     U.uSpin.value = spin;
     U.uTime.value = now / 1000;
     camObj.copy(camera.position);

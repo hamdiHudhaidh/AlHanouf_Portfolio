@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { ARTIST } from './projects.js';
 
-// Design is a ring binder on a black ground. 00 is the closed cover.
-// Each later number opens one project: a coloured divider, a page turn
-// around the rings, and that project's pictures, film, or site.
+// Design is a ring binder on the same bone ground as the rest of the site.
+// 00 is the closed cover. Each later number is one project, in category
+// order. Only the first project of a category has a divider tab, labelled
+// with that category. The projects after it in the same category are plain
+// pages. The page turns around the rings.
 
 const TEX_W = 720;
 const TEX_H = 992;
@@ -14,10 +16,28 @@ const GUTTER = 0.016;
 const HOLE_X = 0.108;
 const RING_Z = 0.02;
 const RING_Y = [0.46, 0, -0.46];
-const TAB_W = 0.15;
-const TAB_COLORS = ['#6f8fbf', '#e7a0b4', '#f2d15a', '#3f9a4a', '#f0a04a', '#d6453d', '#8d6bb5', '#3aa8a0', '#c4785a', '#8a9a4a'];
-const CREAM = '#f3f0e6';
-const INK = '#1c1916';
+const TAB_W = 0.22;
+const SECTION_COLORS = ['#a8603f', '#8c4a2f', '#c49a6c', '#5e4636', '#7a5344', '#3f3833', '#b08968', '#6d4c3d'];
+const CREAM = '#f3eee6';
+const PAPER = '#f3eee6';
+const INK = '#1d1b19';
+const BONE = 0xe8e1d6;
+
+function groupByCategory(list) {
+  const order = [];
+  const buckets = new Map();
+  list.forEach((project) => {
+    const key = project.category || project.title || '';
+    if (!buckets.has(key)) {
+      order.push(key);
+      buckets.set(key, []);
+    }
+    buckets.get(key).push(project);
+  });
+  const grouped = [];
+  order.forEach((key) => buckets.get(key).forEach((project) => grouped.push(project)));
+  return grouped;
+}
 
 function easeInOut(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
@@ -202,8 +222,8 @@ function drawRules(ctx, header, footer, holes) {
   ctx.moveTo(leftX, TEX_H - 58);
   ctx.lineTo(rightX, TEX_H - 58);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(22,18,14,0.82)';
-  ctx.font = '500 13px Inter';
+  ctx.fillStyle = 'rgba(29,27,25,0.88)';
+  ctx.font = '600 18px Inter';
   ctx.textBaseline = 'middle';
   const place = (labels, y) => {
     fillTracked(ctx, labels[0] || '', leftX, y, 'left', 1.6);
@@ -211,7 +231,7 @@ function drawRules(ctx, header, footer, holes) {
     fillTracked(ctx, labels[2] || '', rightX, y, 'right', 1.6);
   };
   place(header, 34);
-  ctx.font = '500 12px Inter';
+  ctx.font = '500 16px Inter';
   place(footer, TEX_H - 34);
   ctx.restore();
 }
@@ -260,7 +280,7 @@ function drawVisitTag(ctx, x, y, w, h) {
   ctx.fillStyle = INK;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = CREAM;
-  ctx.font = '500 15px Inter';
+  ctx.font = '600 20px Inter';
   ctx.textBaseline = 'middle';
   fillTracked(ctx, 'VISIT SITE', x + w / 2, y + h / 2, 'center', 1.8);
 }
@@ -315,8 +335,8 @@ function coverFooter() {
 
 function tabTexture(title, fg) {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 220;
+  canvas.width = 320;
+  canvas.height = 720;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
@@ -324,22 +344,56 @@ function tabTexture(title, fg) {
   ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = fg;
   ctx.textBaseline = 'middle';
-  const label = String(title || '').toUpperCase();
-  let size = 42;
-  let tracking = 1.2;
-  ctx.font = `500 ${size}px Inter`;
-  while (size > 11 && trackedWidth(ctx, label, tracking) > 196) {
-    size -= 1;
-    tracking = size > 18 ? 1 : 0.3;
-    ctx.font = `500 ${size}px Inter`;
-  }
-  fillTracked(ctx, label, 0, 0, 'center', tracking);
+  const raw = String(title || '').toUpperCase();
+  const words = raw.split(/\s+/).filter(Boolean);
+  const lines = words.length >= 2 && raw.length > 9 ? words : [raw];
+  const along = 640;
+  const across = 280;
+  let size = lines.length > 1 ? 78 : 96;
+  const trackingFor = (px) => (px > 48 ? 1.6 : 0.4);
+  const fits = () => {
+    ctx.font = `800 ${size}px Inter`;
+    const tracking = trackingFor(size);
+    const widest = Math.max(...lines.map((line) => trackedWidth(ctx, line, tracking)));
+    const block = size * lines.length + 10 * (lines.length - 1);
+    return widest <= along && block <= across;
+  };
+  while (size > 28 && !fits()) size -= 2;
+  ctx.font = `800 ${size}px Inter`;
+  const tracking = trackingFor(size);
+  const block = size * lines.length + 10 * (lines.length - 1);
+  let y = -block / 2 + size / 2;
+  lines.forEach((line) => {
+    fillTracked(ctx, line, 0, y, 'center', tracking);
+    y += size + 10;
+  });
   ctx.restore();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
   return tex;
+}
+
+function tabGeometry(w, h) {
+  const r = Math.min(0.045, h * 0.34, w * 0.4);
+  const shape = new THREE.Shape();
+  const hw = w / 2;
+  const hh = h / 2;
+  shape.moveTo(-hw, -hh);
+  shape.lineTo(hw - r, -hh);
+  shape.absarc(hw - r, -hh + r, r, -Math.PI / 2, 0, false);
+  shape.lineTo(hw, hh - r);
+  shape.absarc(hw - r, hh - r, r, 0, Math.PI / 2, false);
+  shape.lineTo(-hw, hh);
+  shape.lineTo(-hw, -hh);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.018,
+    bevelEnabled: false,
+    curveSegments: 10,
+  });
+  geo.translate(0, 0, -0.009);
+  return geo;
 }
 
 function blobTexture() {
@@ -372,10 +426,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     images.set(src, await loadImage(src));
   }));
 
-  const pages = projects.map((project, index) => {
+  const ordered = groupByCategory(projects);
+  const pages = ordered.map((project, index) => {
     const num = String(index + 1).padStart(2, '0');
-    const color = TAB_COLORS[index % TAB_COLORS.length];
-    const fill = mixHex(color, '#f6f3ec', 0.12);
+    const color = SECTION_COLORS[0];
+    const fill = PAPER;
     const seen = new Set();
     const coverSrc = project.images?.[0];
     if (coverSrc) seen.add(coverSrc);
@@ -415,7 +470,26 @@ export async function createDesign(renderer, { reduce, projects }) {
       films: [],
       visitRect: null,
       dynamic: videos.length > 0 || !!website,
+      section: 0,
     };
+  });
+
+  const sections = [];
+  pages.forEach((page) => {
+    const key = page.project.category || page.title || page.num;
+    const prev = sections[sections.length - 1];
+    if (!prev || prev.key !== key) {
+      sections.push({
+        key,
+        label: key,
+        first: page.index,
+        color: SECTION_COLORS[sections.length % SECTION_COLORS.length],
+      });
+    }
+    const section = sections[sections.length - 1];
+    page.section = sections.length - 1;
+    page.color = section.color;
+    page.fill = mixHex(section.color, PAPER, 0.8);
   });
 
   const nameFooter = coverFooter();
@@ -457,10 +531,10 @@ export async function createDesign(renderer, { reduce, projects }) {
       ctx.fillStyle = INK;
       ctx.textBaseline = 'top';
       ctx.textAlign = 'left';
-      let size = 68;
+      let size = 84;
       ctx.font = `800 ${size}px Inter`;
       let lines = wrapLines(ctx, page.title.toUpperCase(), box.w);
-      while (size > 34 && lines.length > 3) {
+      while (size > 42 && lines.length > 3) {
         size -= 2;
         ctx.font = `800 ${size}px Inter`;
         lines = wrapLines(ctx, page.title.toUpperCase(), box.w);
@@ -480,10 +554,10 @@ export async function createDesign(renderer, { reduce, projects }) {
     let y = top;
     const mediaCount = page.stills.length + page.videos.length + (page.website ? 1 : 0);
     if (page.text && mediaCount === 0) {
-      let size = 36;
+      let size = 48;
       ctx.font = `400 ${size}px Inter`;
       let lines = wrapLines(ctx, page.text, box.w * 0.92);
-      while (size > 22 && lines.length > 8) {
+      while (size > 30 && lines.length > 8) {
         size -= 2;
         ctx.font = `400 ${size}px Inter`;
         lines = wrapLines(ctx, page.text, box.w * 0.92);
@@ -498,26 +572,26 @@ export async function createDesign(renderer, { reduce, projects }) {
       return;
     }
     if (page.text) {
-      ctx.font = '400 20px Inter';
+      ctx.font = '400 32px Inter';
       const lines = wrapLines(ctx, page.text, box.w);
       lines.forEach((line) => {
         ctx.fillText(line, box.x, y);
-        y += 28;
+        y += 42;
       });
       y += 16;
     }
     const avail = bottom - y;
     if (page.website) {
       const filmH = page.videos.length ? Math.min(200, avail * 0.28) : 0;
-      const visitH = page.website.href ? 48 : 0;
+      const visitH = page.website.href ? 56 : 0;
       const webH = Math.max(80, avail - filmH - visitH - (filmH ? 14 : 0) - (visitH ? 12 : 0));
       page.webRect = { x: box.x, y, w: box.w, h: webH };
       y += webH + 12;
       if (page.website.href) {
-        const bw = Math.min(230, box.w);
-        page.visitRect = { x: box.x, y, w: bw, h: 42 };
-        drawVisitTag(ctx, box.x, y, bw, 42);
-        y += 42 + 14;
+        const bw = Math.min(280, box.w);
+        page.visitRect = { x: box.x, y, w: bw, h: 52 };
+        drawVisitTag(ctx, box.x, y, bw, 52);
+        y += 52 + 16;
       }
       page.films = filmRects(page.videos, box.x, y, box.w, Math.max(0, bottom - y));
       page.films.forEach((film) => drawFilm(ctx, film.rect, film.poster));
@@ -598,10 +672,10 @@ export async function createDesign(renderer, { reduce, projects }) {
   });
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050505);
+  scene.background = new THREE.Color(BONE);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.22;
+  scene.environmentIntensity = 0.5;
   pmrem.dispose();
 
   const rough = roughTexture();
@@ -667,21 +741,21 @@ export async function createDesign(renderer, { reduce, projects }) {
   let viewW = 1;
   let viewH = 1;
 
-  scene.add(new THREE.HemisphereLight(0xf4f7fb, 0x1a1c20, 0.78));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
-  const key = new THREE.DirectionalLight(0xfff7ef, 2.35);
+  scene.add(new THREE.HemisphereLight(0xf7f1e8, 0xc4b5a4, 0.9));
+  scene.add(new THREE.AmbientLight(0xfff8f2, 0.34));
+  const key = new THREE.DirectionalLight(0xfff3e6, 1.55);
   key.position.set(-2.4, 3.6, 5.2);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe4edf8, 0.7);
-  fill.position.set(3.4, 0.4, 3.6);
-  scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.28);
+  const fillLight = new THREE.DirectionalLight(0xf0e4d4, 0.55);
+  fillLight.position.set(3.4, 0.4, 3.6);
+  scene.add(fillLight);
+  const rim = new THREE.DirectionalLight(0xfffaf4, 0.22);
   rim.position.set(0.4, -2.2, 2.4);
   scene.add(rim);
 
   const backdrop = new THREE.Mesh(
     new THREE.PlaneGeometry(30, 18),
-    new THREE.MeshBasicMaterial({ color: 0x070707 }),
+    new THREE.MeshBasicMaterial({ color: 0xddd6cb }),
   );
   backdrop.position.z = -0.9;
   scene.add(backdrop);
@@ -779,33 +853,37 @@ export async function createDesign(renderer, { reduce, projects }) {
   visit.position.z = 0.02;
   rightPage.add(visit);
 
-  const tabMargin = PAGE_H * 0.055;
-  const tabSpan = (PAGE_H - tabMargin * 2) / Math.max(1, pages.length);
+  const tabMargin = PAGE_H * 0.04;
+  const tabCount = Math.max(1, sections.length);
+  const tabSpan = (PAGE_H - tabMargin * 2) / tabCount;
   const tabH = tabSpan * 0.9;
-  const tabs = pages.map((page, i) => {
-    const fg = luminance(page.color) > 0.58 ? INK : '#f6f3ee';
+  const tabGeo = tabGeometry(TAB_W, tabH);
+  const tabs = sections.map((section, i) => {
+    const fg = luminance(section.color) > 0.62 ? INK : '#f3eee6';
     const group = new THREE.Group();
-    group.userData.slot = i + 1;
+    group.userData.slot = section.first + 1;
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(TAB_W, tabH, 0.012),
-      new THREE.MeshBasicMaterial({ color: page.color }),
+      tabGeo,
+      new THREE.MeshBasicMaterial({ color: section.color, side: THREE.DoubleSide }),
     );
     const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(TAB_W * 0.9, tabH * 0.9),
-      new THREE.MeshBasicMaterial({ map: tabTexture(page.title, fg), transparent: true, depthWrite: false }),
+      new THREE.PlaneGeometry(TAB_W * 0.84, tabH * 0.82),
+      new THREE.MeshBasicMaterial({ map: tabTexture(section.label, fg), transparent: true, depthWrite: false }),
     );
-    label.position.z = 0.0075;
+    label.position.z = 0.012;
     body.renderOrder = 2;
     label.renderOrder = 3;
     group.add(body);
     group.add(label);
     group.position.y = PAGE_H / 2 - tabMargin - tabSpan * (i + 0.5);
     scene.add(group);
-    return { group, from: 0, to: 0, y: group.position.y };
+    return { group, body, from: 0, to: 0, y: group.position.y, section: i };
   });
 
-  function tabTarget(i, which) {
-    return i < which - 1 ? Math.PI : 0;
+  function tabTarget(sectionIndex, which) {
+    if (which <= 0) return 0;
+    const open = pages[which - 1] ? pages[which - 1].section : 0;
+    return open > sectionIndex ? Math.PI : 0;
   }
 
   function poseTab(tab, angle) {
@@ -816,6 +894,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       tab.y,
       Math.sin(angle) * 0.18,
     );
+    tab.body.scale.x = outward;
   }
 
   function poseTabs(t) {
@@ -845,7 +924,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (graded) return;
     graded = true;
-    renderer.toneMappingExposure = gradeSaved.exposure * 1.14;
+    renderer.toneMappingExposure = gradeSaved.exposure * 1.04;
   }
 
   function gradeOff() {
@@ -885,8 +964,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     curlBack.visible = false;
     leftStack.forEach((sheet) => { sheet.visible = which > 0; });
     placeVisit(which);
-    tabs.forEach((tab, i) => {
-      const angle = tabTarget(i, which);
+    tabs.forEach((tab) => {
+      const angle = tabTarget(tab.section, which);
       tab.from = angle;
       tab.to = angle;
       poseTab(tab, angle);
@@ -934,9 +1013,9 @@ export async function createDesign(renderer, { reduce, projects }) {
     visit.visible = false;
     showCurl(true);
     deform(turn.fromAngle);
-    tabs.forEach((tab, i) => {
-      tab.from = tabTarget(i, from);
-      tab.to = tabTarget(i, to);
+    tabs.forEach((tab) => {
+      tab.from = tabTarget(tab.section, from);
+      tab.to = tabTarget(tab.section, to);
     });
     turning = true;
   }
@@ -971,15 +1050,15 @@ export async function createDesign(renderer, { reduce, projects }) {
     let halfH;
     let focusX;
     const focusY = 0;
-    if (which === 0 || narrow) {
+    if (which === 0) {
       const left = -HOLE_X - 0.02;
-      const right = GUTTER + PAGE_W + TAB_W + 0.02;
+      const right = GUTTER + PAGE_W + TAB_W + 0.04;
       halfW = (right - left) / 2;
-      halfH = PAGE_H / 2 + 0.02;
+      halfH = PAGE_H / 2 + 0.04;
       focusX = (left + right) / 2;
     } else {
-      halfW = GUTTER + PAGE_W + TAB_W + 0.03;
-      halfH = PAGE_H / 2 + 0.03;
+      halfW = GUTTER + PAGE_W + TAB_W + 0.05;
+      halfH = PAGE_H / 2 + 0.04;
       focusX = 0;
     }
     const distV = halfH / (tanV * usable * 0.93);
