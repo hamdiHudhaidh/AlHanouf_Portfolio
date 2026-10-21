@@ -228,9 +228,10 @@ export async function createCeramics(renderer, { reduce, projects }) {
     U.uSpan.value = spanFor(shapeOf(i));
   }
   showPhoto(0);
-  U.uFinish.value = 1;
+  U.uFinish.value = 0;
 
   let hidden = false;
+  let fade = 0;
   let shownFor = -1;
 
   function resize(w, h) {
@@ -253,6 +254,8 @@ export async function createCeramics(renderer, { reduce, projects }) {
     hidden = true;
     U.uA.value = shapeOf(cur);
     U.uB.value = shapeOf(next);
+    fade = 0;
+    U.uFinish.value = 0;
     autoUntil = performance.now() + (reduce ? 0 : 2200);
     return true;
   }
@@ -296,7 +299,12 @@ export async function createCeramics(renderer, { reduce, projects }) {
     wheel.rotation.y = angle;
     const spin = vel / MAXV;
     U.uT.value = trans ? Math.min(t, 1) : 0;
-    U.uFinish.value = (!trans && !hidden) ? 1 : 0;
+    const stopped = !trans && !hidden && vel === 0 && now >= autoUntil;
+    if (!stopped) fade = 0;
+    else if (reduce) fade = 1;
+    else fade = Math.min(1, fade + dt);
+    const blend = fade * fade * (3 - 2 * fade);
+    U.uFinish.value = blend;
     U.uSpin.value = spin;
     U.uTime.value = now / 1000;
     camObj.copy(camera.position);

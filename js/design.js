@@ -2,11 +2,10 @@ import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { ARTIST } from './projects.js';
 
-// Design is a ring binder on the same bone ground as the rest of the site.
-// 00 is the closed cover. Each later number is one project, in category
-// order. Only the first project of a category has a divider tab, labelled
-// with that category. The projects after it in the same category are plain
-// pages. The page turns around the rings.
+// Design is a ring binder on a black ground. 00 is the closed cover.
+// Each later number is one project, in category order. Only the first
+// project of a category has a divider tab, labelled with that category.
+// Every page in that category uses the tab colour. The page turns around the rings.
 
 const TEX_W = 720;
 const TEX_H = 992;
@@ -17,11 +16,9 @@ const HOLE_X = 0.108;
 const RING_Z = 0.02;
 const RING_Y = [0.46, 0, -0.46];
 const TAB_W = 0.22;
-const SECTION_COLORS = ['#a8603f', '#8c4a2f', '#c49a6c', '#6b5344', '#8d6552', '#5c4e45', '#b08968', '#7a5644'];
-const CREAM = '#f3eee6';
-const PAPER = '#f3eee6';
-const INK = '#1d1b19';
-const BONE = 0xe8e1d6;
+const SECTION_COLORS = ['#6f8fbf', '#e7a0b4', '#f2d15a', '#3f9a4a', '#f0a04a', '#d6453d', '#8d6bb5', '#3aa8a0', '#c4785a', '#8a9a4a'];
+const CREAM = '#f3f0e6';
+const INK = '#1c1916';
 
 function groupByCategory(list) {
   const order = [];
@@ -432,7 +429,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   const pages = ordered.map((project, index) => {
     const num = String(index + 1).padStart(2, '0');
     const color = SECTION_COLORS[0];
-    const fill = PAPER;
+    const fill = CREAM;
     const seen = new Set();
     const coverSrc = project.images?.[0];
     if (coverSrc) seen.add(coverSrc);
@@ -491,7 +488,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const section = sections[sections.length - 1];
     page.section = sections.length - 1;
     page.color = section.color;
-    page.fill = mixHex(section.color, PAPER, 0.8);
+    page.fill = mixHex(section.color, '#f6f3ec', 0.12);
   });
 
   const nameFooter = coverFooter();
@@ -674,10 +671,10 @@ export async function createDesign(renderer, { reduce, projects }) {
   });
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BONE);
+  scene.background = new THREE.Color(0x050505);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.5;
+  scene.environmentIntensity = 0.22;
   pmrem.dispose();
 
   const rough = roughTexture();
@@ -743,21 +740,21 @@ export async function createDesign(renderer, { reduce, projects }) {
   let viewW = 1;
   let viewH = 1;
 
-  scene.add(new THREE.HemisphereLight(0xf7f1e8, 0xc4b5a4, 0.9));
-  scene.add(new THREE.AmbientLight(0xfff8f2, 0.34));
-  const key = new THREE.DirectionalLight(0xfff3e6, 1.55);
+  scene.add(new THREE.HemisphereLight(0xf4f7fb, 0x1a1c20, 0.78));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+  const key = new THREE.DirectionalLight(0xfff7ef, 2.35);
   key.position.set(-2.4, 3.6, 5.2);
   scene.add(key);
-  const fillLight = new THREE.DirectionalLight(0xf0e4d4, 0.55);
+  const fillLight = new THREE.DirectionalLight(0xe4edf8, 0.7);
   fillLight.position.set(3.4, 0.4, 3.6);
   scene.add(fillLight);
-  const rim = new THREE.DirectionalLight(0xfffaf4, 0.22);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.28);
   rim.position.set(0.4, -2.2, 2.4);
   scene.add(rim);
 
   const backdrop = new THREE.Mesh(
     new THREE.PlaneGeometry(30, 18),
-    new THREE.MeshBasicMaterial({ color: 0xddd6cb }),
+    new THREE.MeshBasicMaterial({ color: 0x070707 }),
   );
   backdrop.position.z = -0.9;
   scene.add(backdrop);
@@ -861,7 +858,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   const tabH = tabSpan * 0.9;
   const tabGeo = tabGeometry(TAB_W, tabH);
   const tabs = sections.map((section, i) => {
-    const fg = luminance(section.color) > 0.5 ? INK : '#f6f1e8';
+    const fg = luminance(section.color) > 0.58 ? INK : '#f6f3ee';
     const group = new THREE.Group();
     group.userData.slot = section.first + 1;
     const body = new THREE.Mesh(
@@ -928,7 +925,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (graded) return;
     graded = true;
-    renderer.toneMappingExposure = gradeSaved.exposure * 1.04;
+    renderer.toneMappingExposure = gradeSaved.exposure * 1.14;
   }
 
   function gradeOff() {
