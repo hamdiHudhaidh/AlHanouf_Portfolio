@@ -6,10 +6,10 @@
 //   shape 0 = the word hello, 2 = bottle, 3 = open bowl, 4 = tall vase. Use the closest lathe profile.
 // EXHIBITION items: { kind: 'painting' | 'sculpture', title, image?, artist?, year?, medium?, dimensions?, description? }
 // DESIGN items: { slug, title, text?, year?, images: [path], items?, source, links?: [{label, href}] }
-//   items hang on the drying line when a project is not only stills:
+//   items are the project's extra pieces in the binder, after the cover still:
 //   { kind: 'image' | 'video' | 'website', src, poster?, href? }
 //   video files are local copies of the clips on her project page. poster is a frame from that clip.
-//   a website src is a capture of the URL she published, hung as a scrolling page.
+//   a website src is a capture of the URL she published, shown as a scrolling page.
 
 export const ARTIST = {
   mark: 'Alhanouf Khalid',
