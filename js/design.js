@@ -4,10 +4,9 @@ import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 // Design is one off-white wall with two layers of twine.
 // Two front lines hold every cover. Each project has one back line, the
 // same jute, hung just behind its cover, with that project's pieces pegged
-// side by side. At 00 the cover hides them. Choosing a project eases that
-// back line closer and larger, into the open side of the frame, and turns
-// the cover and those pieces to face the camera. Moving between projects
-// fades the pieces while they turn.
+// side by side. Nothing on the wall moves. The camera glides, and the
+// pieces fade, so a chosen project reads cover on one side and content
+// on the other. At 00 every cover is up and the back lines stay hidden.
 
 const WALL_HALF = 4.15;
 const SAG = 0.16;
@@ -18,11 +17,7 @@ const COL_PITCH = 1.52;
 const MAX_W = 4.25;
 const COL_MAX = 1.18;
 const FRONT_Z = 2.05;
-const REST_DEPTH = 0.46;
-const FOCUS_Z = 0.2;
-const FADE_MS = 420;
-const ORBIT = 2.15;
-const FOCUS_DIST = 2.2;
+const BACK_Z = 0.2;
 
 function hash(n) {
   let s = Math.imul(n + 1, 9973) >>> 0;
@@ -1279,16 +1274,11 @@ export async function createDesign(renderer, { reduce, projects }) {
     const faceCy = faceAny ? (faceBox.min.y + faceBox.max.y) / 2 : contentCy;
     const faceW = faceAny ? Math.max(0.2, faceBox.max.x - faceBox.min.x) : contentW;
     const faceH = faceAny ? Math.max(0.2, faceBox.max.y - faceBox.min.y) : contentH;
-    const restScale = Math.min((matW * 0.72) / contentW, (matH * 0.78) / contentH);
-    const restCenter = new THREE.Vector3(0, coverY, -REST_DEPTH);
-    backGroup.scale.setScalar(restScale);
-    backGroup.position.set(
-      restCenter.x - contentCx * restScale,
-      restCenter.y - contentCy * restScale,
-      restCenter.z,
-    );
+    backGroup.position.set(0, 0, -BACK_Z);
 
     lineGroup.position.copy(home);
+    lineGroup.updateWorldMatrix(true, true);
+    const coverWorld = new THREE.Box3().setFromObject(heroPivot.children[heroPivot.children.length - 1]);
     scene.add(lineGroup);
 
     const faces = [];
@@ -1319,7 +1309,6 @@ export async function createDesign(renderer, { reduce, projects }) {
       videos: lineVideos,
       scroll: cluster.userData.scroll || null,
       home,
-      swingStart: -1,
       coverY: home.y + coverY,
       heroBottom,
       heroTop,
@@ -1327,17 +1316,56 @@ export async function createDesign(renderer, { reduce, projects }) {
       matH,
       contentCx,
       contentCy,
+      contentW,
+      contentH,
       faceCx,
       faceCy,
       faceW,
       faceH,
-      restCenter,
-      restScale,
-      focusCenter: restCenter.clone(),
-      focusScale: restScale,
-      backCenter: restCenter.clone(),
-      backScale: restScale,
+      backMinX: 0,
+      backMaxX: 0,
+      backMinY: 0,
+      backMaxY: 0,
+      coverMinX: coverWorld.min.x,
+      coverMaxX: coverWorld.max.x,
+      coverMinY: coverWorld.min.y,
+      coverMaxY: coverWorld.max.y,
     });
+  });
+
+  lines.forEach((line, index) => {
+    const row = Math.floor(index / PER_ROW);
+    const left = index - 1;
+    const right = index + 1;
+    const onRow = (i) => i >= 0 && i < lines.length && Math.floor(i / PER_ROW) === row;
+    const neighbor = onRow(left) ? lines[left] : lines[right];
+    const hostW = Math.max(0.45, neighbor.coverMaxX - neighbor.coverMinX);
+    const hostH = Math.max(0.45, neighbor.coverMaxY - neighbor.coverMinY);
+    const scale = Math.min(
+      (hostW * 0.9) / line.contentW,
+      (hostH * 0.86) / line.contentH,
+    );
+    const hostCx = (neighbor.coverMinX + neighbor.coverMaxX) / 2;
+    const hostCy = (neighbor.coverMinY + neighbor.coverMaxY) / 2;
+    line.backGroup.scale.setScalar(scale);
+    line.backGroup.position.set(
+      (hostCx - line.home.x) - line.contentCx * scale,
+      (hostCy - line.home.y) - line.contentCy * scale,
+      -BACK_Z,
+    );
+    line.backGroup.updateWorldMatrix(true, true);
+    const backWorld = new THREE.Box3();
+    let backAny = false;
+    line.backGroup.traverse((obj) => {
+      if (!obj.userData || !obj.userData.billboard) return;
+      backWorld.expandByObject(obj);
+      backAny = true;
+    });
+    if (!backAny) backWorld.setFromObject(line.backGroup);
+    line.backMinX = backWorld.min.x;
+    line.backMaxX = backWorld.max.x;
+    line.backMinY = backWorld.min.y;
+    line.backMaxY = backWorld.max.y;
   });
 
   let slot = 0;
@@ -1349,50 +1377,14 @@ export async function createDesign(renderer, { reduce, projects }) {
   let poseFov = 22;
   let fovFrom = 22;
   let fovTo = 22;
-  let lastFaceNow = 0;
   let fadeFrom = -1;
-  let fadeStart = 0;
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  const facePoint = new THREE.Vector3();
 
-  function targetYaw(obj, camPos) {
-    obj.getWorldPosition(facePoint);
-    return Math.atan2(camPos.x - facePoint.x, camPos.z - facePoint.z);
-  }
-
-  function faceLine(line, camPos) {
-    line.faces.forEach((obj) => {
-      obj.rotation.y = targetYaw(obj, camPos);
-    });
-    line.group.updateMatrixWorld(true);
-  }
-
-  function clearFace(line) {
-    line.faces.forEach((obj) => { obj.rotation.y = 0; });
-    line.group.updateMatrixWorld(true);
-  }
-
-  function placeBack(line, center, scale) {
-    line.backGroup.position.set(
-      center.x - line.contentCx * scale,
-      center.y - line.contentCy * scale,
-      center.z,
-    );
-    line.backGroup.scale.setScalar(scale);
-    line.backGroup.updateMatrixWorld(true);
-  }
-
-  function fadeEase(time) {
-    if (reduce) return 1;
-    const u = Math.min(1, Math.max(0, (time - fadeStart) / FADE_MS));
-    return u < 0.5 ? 2 * u * u : 1 - ((-2 * u + 2) ** 2) / 2;
-  }
-
-  function opacityFor(index, time) {
+  function opacityFor(index, glide) {
     const focus = slot - 1;
-    const eased = fadeEase(time);
-    if (reduce || eased >= 1) return focus < 0 || index === focus ? 1 : 0;
+    const eased = reduce ? 1 : glide;
+    if (eased >= 1) return focus < 0 || index === focus ? 1 : 0;
     if (fadeFrom < 0 && focus >= 0) return index === focus ? 1 : 1 - eased;
     if (focus < 0) return index === fadeFrom ? 1 : eased;
     if (index === focus) return eased;
@@ -1407,6 +1399,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (!shown) return;
     line.materials.forEach((mat) => {
       mat.opacity = mat.userData.baseOpacity * amount;
+      mat.depthWrite = amount > 0.96;
     });
   }
 
@@ -1497,116 +1490,74 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function focusPose(line) {
-    const savedCenter = line.backCenter.clone();
-    const savedScale = line.backScale;
     const aspect = Math.max(0.35, camera.aspect);
     const tall = aspect < 0.9;
-    const fov = tall ? 48 : 33;
+    const fov = tall ? 42 : 32;
     const tanV = Math.tan((fov * Math.PI) / 360);
-    const frameL = -0.97;
-    const frameR = 0.96;
-    const frameB = tall ? -0.8 : -0.72;
-    const frameT = tall ? 0.88 : 0.78;
-    const gap = 0.07;
-    const maxCoverH = (frameT - frameB) * (tall ? 0.7 : 0.88);
-    const maxCoverW = tall ? 0.5 : 0.56;
+    const coverL = line.coverMinX;
+    const coverR = line.coverMaxX;
+    const leftOut = coverL - line.backMinX;
+    const rightOut = line.backMaxX - coverR;
+    const left = leftOut >= rightOut ? line.backMinX : coverL;
+    const right = leftOut >= rightOut ? coverR : line.backMaxX;
+    const bottom = Math.min(line.backMinY, line.coverMinY);
+    const top = Math.max(line.backMaxY, line.coverMaxY);
+    const spanX = Math.max(0.6, right - left);
+    const spanY = Math.max(0.45, top - bottom);
+    const cx = (left + right) / 2;
+    const cy = (bottom + top) / 2;
     const dist = Math.max(
-      line.matH / (maxCoverH * tanV),
-      line.matW / (maxCoverW * tanV * aspect),
-      2.2,
+      spanY / (2 * tanV * (tall ? 0.7 : 0.78)),
+      spanX / (2 * tanV * aspect * (tall ? 0.86 : 0.84)),
+      1.8,
     );
-    const halfH = dist * tanV;
-    const halfW = halfH * aspect;
-    const coverNdcW = Math.min(maxCoverW, line.matW / halfW);
-    const coverRight = frameR - 0.02;
-    const coverNdcX = coverRight - coverNdcW / 2;
-    const coverNdcY = (frameT + frameB) / 2;
-    let camX = line.home.x - coverNdcX * halfW;
-    let camY = line.coverY - coverNdcY * halfH;
-    const camZ = FRONT_Z + dist;
-    const focusZ = FOCUS_Z;
-    const backDist = camZ - (FRONT_Z + focusZ);
-    const backHalfW = backDist * tanV * aspect;
-    const backHalfH = backDist * tanV;
-    const slotL = frameL + 0.03;
-    const slotB = frameB + 0.03;
-    const slotT = frameT - 0.03;
+    const side = dist * 0.07;
+    poseFov = fov;
+    camTarget.set(cx + side, cy, FRONT_Z + dist);
+    lookTarget.set(cx + side * 0.18, cy, FRONT_Z - 0.04);
 
-    const placeFace = (scale, faceWorldX, faceWorldY) => {
-      line.focusScale = scale;
-      line.focusCenter.set(
-        (faceWorldX - line.home.x) - (line.faceCx - line.contentCx) * scale,
-        (faceWorldY - line.home.y) - (line.faceCy - line.contentCy) * scale,
-        focusZ,
-      );
-    };
-
-    const shoot = () => {
-      placeBack(line, line.focusCenter, line.focusScale);
-      probeCam.fov = fov;
+    const frameL = -0.96;
+    const frameR = 0.95;
+    const frameB = tall ? -0.8 : -0.72;
+    const frameT = tall ? 0.86 : 0.78;
+    for (let iter = 0; iter < 3; iter += 1) {
+      probeCam.fov = poseFov;
       probeCam.aspect = aspect;
       probeCam.up.set(0, 1, 0);
-      probeCam.position.set(camX, camY, camZ);
-      probeCam.lookAt(camX, camY, FRONT_Z);
+      probeCam.position.copy(camTarget);
+      probeCam.lookAt(lookTarget);
       probeCam.updateProjectionMatrix();
       probeCam.updateMatrixWorld(true);
-      faceLine(line, probeCam.position);
-      return {
-        cover: projectRoot(line.coverSheet, probeCam),
-        back: projectFaces(line, probeCam, true),
-      };
-    };
-
-    clearFace(line);
-    let scale = Math.min(
-      (0.8 * backHalfW) / line.faceW,
-      ((slotT - slotB) * backHalfH) / line.faceH,
-    );
-    scale = Math.max(line.restScale, Math.min(scale, 4));
-    let faceWorldX = camX + ((slotL + (coverNdcX - coverNdcW / 2) - gap) / 2) * backHalfW;
-    let faceWorldY = camY + coverNdcY * backHalfH;
-    placeFace(scale, faceWorldX, faceWorldY);
-
-    let shot = shoot();
-    if (shot.cover) {
-      const mx = (shot.cover.x0 + shot.cover.x1) / 2;
-      const my = (shot.cover.y0 + shot.cover.y1) / 2;
-      camX += (mx - coverNdcX) * halfW;
-      camY += (my - coverNdcY) * halfH;
-      shot = shoot();
-    }
-
-    for (let iter = 0; iter < 4; iter += 1) {
-      const coverLeft = shot.cover ? shot.cover.x0 : (coverNdcX - coverNdcW / 2);
-      const slotR = coverLeft - gap;
-      const slotW = Math.max(0.28, slotR - slotL);
-      const slotH = Math.max(0.28, slotT - slotB);
-      const slotCx = (slotL + slotR) / 2;
-      const slotCy = (slotB + slotT) / 2;
-      if (shot.back) {
-        const bw = Math.max(0.04, shot.back.x1 - shot.back.x0);
-        const bh = Math.max(0.04, shot.back.y1 - shot.back.y0);
-        const mx = (shot.back.x0 + shot.back.x1) / 2;
-        const my = (shot.back.y0 + shot.back.y1) / 2;
-        scale *= Math.min(slotW / bw, slotH / bh);
-        scale = Math.max(line.restScale, Math.min(scale, 4));
-        faceWorldX += (slotCx - mx) * backHalfW;
-        faceWorldY += (slotCy - my) * backHalfH;
-      } else {
-        faceWorldX = camX + slotCx * backHalfW;
-        faceWorldY = camY + slotCy * backHalfH;
+      const cover = projectRoot(line.coverSheet, probeCam);
+      const back = projectFaces(line, probeCam, true);
+      if (!cover || !back) break;
+      const x0 = Math.min(cover.x0, back.x0);
+      const x1 = Math.max(cover.x1, back.x1);
+      const y0 = Math.min(cover.y0, back.y0);
+      const y1 = Math.max(cover.y1, back.y1);
+      const fit = Math.min(
+        (frameR - frameL) / Math.max(0.2, x1 - x0),
+        (frameT - frameB) / Math.max(0.2, y1 - y0),
+      );
+      if (fit < 0.98) {
+        const pull = camTarget.z - FRONT_Z;
+        camTarget.z = FRONT_Z + pull / Math.max(0.72, fit);
+        lookTarget.z = FRONT_Z - 0.04;
       }
-      placeFace(scale, faceWorldX, faceWorldY);
-      shot = shoot();
+      const mx = (x0 + x1) / 2;
+      const my = (y0 + y1) / 2;
+      const wantX = (frameL + frameR) / 2;
+      const wantY = (frameB + frameT) / 2;
+      const halfW = (camTarget.z - FRONT_Z) * tanV * aspect;
+      const halfH = (camTarget.z - FRONT_Z) * tanV;
+      const shiftX = (mx - wantX) * halfW;
+      const shiftY = (my - wantY) * halfH;
+      camTarget.x += shiftX;
+      lookTarget.x += shiftX;
+      camTarget.y += shiftY;
+      lookTarget.y += shiftY;
+      if (fit > 0.98 && Math.abs(mx - wantX) < 0.04 && Math.abs(my - wantY) < 0.04) break;
     }
-
-    clearFace(line);
-    placeBack(line, savedCenter, savedScale);
-    line.backCenter.copy(savedCenter);
-    line.backScale = savedScale;
-    poseFov = fov;
-    camTarget.set(camX, camY, camZ);
-    lookTarget.set(camX, camY, FRONT_Z);
   }
 
   function paintPoster(screen) {
@@ -1641,7 +1592,6 @@ export async function createDesign(renderer, { reduce, projects }) {
   function aim(next, snap) {
     const count = lines.length + 1;
     fadeFrom = slot - 1;
-    fadeStart = performance.now();
     slot = ((next % count) + count) % count;
     const focus = slot - 1;
     if (focus < 0) overviewPose();
@@ -1649,9 +1599,6 @@ export async function createDesign(renderer, { reduce, projects }) {
     camTo.copy(camTarget);
     lookTo.copy(lookTarget);
     fovTo = poseFov;
-    lines.forEach((line, i) => {
-      line.swingStart = i === focus && !snap && !reduce ? performance.now() : -1;
-    });
     syncMedia();
     shadowWarm = 3;
     if (snap || reduce) {
@@ -1662,19 +1609,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       lookNow.copy(lookTo);
       camera.lookAt(lookNow);
       camera.updateMatrixWorld(true);
-      lines.forEach((line, i) => {
-        const on = i === focus;
-        const center = on ? line.focusCenter : line.restCenter;
-        const scale = on ? line.focusScale : line.restScale;
-        line.backCenter.copy(center);
-        line.backScale = scale;
-        placeBack(line, center, scale);
-        line.pivots.forEach((pivot) => { pivot.rotation.x = 0; });
-        line.faces.forEach((obj) => {
-          obj.rotation.y = on ? targetYaw(obj, camera.position) : 0;
-        });
-        applyOpacity(i, focus < 0 || on ? 1 : 0);
-      });
+      lines.forEach((line, i) => applyOpacity(i, focus < 0 || i === focus ? 1 : 0));
       return;
     }
     camFrom.copy(camera.position);
@@ -1742,32 +1677,19 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
     if (suspended) return;
     gradeOn();
-    const faceElapsed = lastFaceNow ? Math.min(1.5, Math.max(0, (time - lastFaceNow) / 1000)) : 0.016;
-    const faceStep = 1 - Math.exp(-faceElapsed / 0.34);
-    lastFaceNow = time;
-    let e = 1;
-    let apply = false;
+    let glide = 1;
     if (moving && !reduce) {
       const t = Math.min(1, (time - moveStart) / moveMs);
-      e = easeGlide(t, moveEaseIn);
-      apply = true;
+      glide = easeGlide(t, moveEaseIn);
+      camera.fov = fovFrom + (fovTo - fovFrom) * glide;
+      camera.updateProjectionMatrix();
+      camera.position.lerpVectors(camFrom, camTo, glide);
+      lookNow.lerpVectors(lookFrom, lookTo, glide);
       if (t >= 1) moving = false;
     }
     const focus = slot - 1;
-    let swinging = false;
     lines.forEach((line, i) => {
-      const on = i === focus;
-      line.pivots.forEach((pivot, k) => {
-        let target = 0;
-        if (on && !reduce && line.swingStart >= 0) {
-          const st = (time - line.swingStart) / 1000 - k * 0.05;
-          if (st > 0) target = -0.16 * Math.sin(st * 4) * Math.exp(-1.25 * st);
-        }
-        if (Math.abs(target) > 0.001) swinging = true;
-        if (reduce || on) pivot.rotation.x = target;
-        else pivot.rotation.x += (0 - pivot.rotation.x) * Math.min(1, (dt || 0.016) * 6);
-      });
-      if (on && !document.hidden) {
+      if (i === focus && !document.hidden) {
         line.videos.forEach((screen) => {
           if (screen.video.paused) {
             const pending = screen.video.play();
@@ -1782,41 +1704,10 @@ export async function createDesign(renderer, { reduce, projects }) {
           line.scroll.tex.offset.y = line.scroll.top * (1 - wave);
         }
       }
+      applyOpacity(i, opacityFor(i, moving ? glide : 1));
     });
-    if (apply) {
-      camera.fov = fovFrom + (fovTo - fovFrom) * e;
-      camera.updateProjectionMatrix();
-      camera.position.lerpVectors(camFrom, camTo, e);
-      lookNow.lerpVectors(lookFrom, lookTo, e);
-    }
     camera.lookAt(lookNow);
-    const moveStep = reduce ? 1 : (1 - Math.exp(-faceElapsed / 0.16));
-    lines.forEach((line, i) => {
-      const on = i === focus;
-      const destC = on ? line.focusCenter : line.restCenter;
-      const destS = on ? line.focusScale : line.restScale;
-      if (moveStep >= 1) {
-        line.backCenter.copy(destC);
-        line.backScale = destS;
-      } else {
-        line.backCenter.lerp(destC, moveStep);
-        line.backScale += (destS - line.backScale) * moveStep;
-      }
-      if (line.backCenter.distanceTo(destC) > 0.01 || Math.abs(line.backScale - destS) > 0.01) swinging = true;
-      placeBack(line, line.backCenter, line.backScale);
-      line.faces.forEach((obj) => {
-        const target = on ? targetYaw(obj, camera.position) : 0;
-        if (reduce) {
-          obj.rotation.y = target;
-          return;
-        }
-        const next = obj.rotation.y + (target - obj.rotation.y) * faceStep;
-        if (Math.abs(target - obj.rotation.y) > 0.004) swinging = true;
-        obj.rotation.y = next;
-      });
-      applyOpacity(i, opacityFor(i, time));
-    });
-    if (moving || swinging || shadowWarm > 0) {
+    if (moving || shadowWarm > 0) {
       renderer.shadowMap.needsUpdate = true;
       if (shadowWarm > 0) shadowWarm -= 1;
     }
