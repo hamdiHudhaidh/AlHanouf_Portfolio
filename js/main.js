@@ -354,42 +354,13 @@ addEventListener('pointermove', (e) => {
   cursor.classList.toggle('big', !!e.target.closest('button, a, .c-img'));
 });
 
-let audio = null;
-$('#soundBtn').addEventListener('click', (e) => {
-  const b = e.currentTarget;
-  if (!audio) {
-    const ctx = new AudioContext();
-    const len = ctx.sampleRate * 2;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    let lastv = 0;
-    for (let i = 0; i < len; i++) { lastv = (lastv + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = lastv * 3.5; }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'lowpass';
-    filt.frequency.value = 300;
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
-    src.connect(filt).connect(gain).connect(ctx.destination);
-    src.start();
-    audio = { ctx, gain, filt, on: false };
-  }
-  audio.on = !audio.on;
-  if (audio.on) audio.ctx.resume();
-  b.setAttribute('aria-pressed', String(audio.on));
-  b.querySelector('i').textContent = audio.on ? 'on' : 'off';
-});
-
 let last = performance.now();
 let lastProject = null;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  let spin = 0;
   if (active && current !== 'about') {
-    spin = active.update(dt, now) || 0;
+    active.update(dt, now);
     if (renderer) {
       if (active.render) active.render(renderer);
       else renderer.render(active.scene, active.camera);
@@ -405,10 +376,6 @@ function frame(now) {
       if (current === 'design') showDesign();
       paintHud();
     }
-  }
-  if (audio?.on) {
-    audio.gain.gain.value = current === 'ceramics' ? spin * 0.18 : 0;
-    audio.filt.frequency.value = 160 + spin * 600;
   }
   cx += (tx - cx) * 0.22;
   cy += (ty - cy) * 0.22;

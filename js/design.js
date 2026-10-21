@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { ARTIST } from './projects.js';
 
-// Design is a ring binder on a black ground. 00 is the closed cover.
-// Each later number is one project, in category order. Only the first
-// project of a category has a divider tab, labelled with that category.
-// Every page in that category uses the tab colour. The page turns around the rings.
+// Design is a ring binder on the same bone ground as the other scenes.
+// 00 is the closed cover. Each later number is one project, in category
+// order. Only the first project of a category has a divider tab, labelled
+// with that category in one horizontal size. Every page in that category
+// uses the tab colour. The page turns around the rings.
 
 const TEX_W = 720;
 const TEX_H = 992;
@@ -15,7 +16,6 @@ const GUTTER = 0.016;
 const HOLE_X = 0.108;
 const RING_Z = 0.02;
 const RING_Y = [0.46, 0, -0.46];
-const TAB_W = 0.22;
 const SECTION_COLORS = ['#6f8fbf', '#e7a0b4', '#f2d15a', '#3f9a4a', '#f0a04a', '#d6453d', '#8d6bb5', '#3aa8a0', '#c4785a', '#8a9a4a'];
 const CREAM = '#f3f0e6';
 const INK = '#1c1916';
@@ -330,43 +330,35 @@ function coverFooter() {
   return [words[0] || '', words[1] || '', words[2] || ''];
 }
 
-function tabTexture(title, fg) {
+// One size for every tab, chosen so the longest label fits on one horizontal line.
+const TAB_FONT = 128;
+const TAB_TRACK = 1.5;
+
+function tabTypeFor(labels) {
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `800 ${TAB_FONT}px Inter`;
+  const lines = labels.map((label) => String(label || '').toUpperCase());
+  const widest = Math.max(1, ...lines.map((line) => trackedWidth(probe, line, TAB_TRACK)));
+  const padX = Math.round(TAB_FONT * 0.34);
+  const padY = Math.round(TAB_FONT * 0.28);
+  return {
+    size: TAB_FONT,
+    tracking: TAB_TRACK,
+    width: Math.ceil(widest + padX * 2),
+    height: Math.ceil(TAB_FONT * 1.15 + padY * 2),
+  };
+}
+
+function tabTexture(title, fg, type) {
   const canvas = document.createElement('canvas');
-  // Wider than tall, matching the tab: the word runs along the short side
-  // and the letter height sits in the stick-out, without stretching.
-  canvas.width = 640;
-  canvas.height = 440;
+  canvas.width = type.width;
+  canvas.height = type.height;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = fg;
   ctx.textBaseline = 'middle';
-  const raw = String(title || '').toUpperCase();
-  const words = raw.split(/\s+/).filter(Boolean);
-  const lines = words.length >= 2 && raw.replace(/\s+/g, '').length > 8 ? words : [raw];
-  const along = 400;
-  const across = 560;
-  let size = lines.length > 1 ? 118 : 150;
-  const trackingFor = (px) => (px > 72 ? 2 : 0.5);
-  const fits = () => {
-    ctx.font = `800 ${size}px Inter`;
-    const tracking = trackingFor(size);
-    const widest = Math.max(...lines.map((line) => trackedWidth(ctx, line, tracking)));
-    const block = size * lines.length + size * 0.18 * (lines.length - 1);
-    return widest <= along && block <= across;
-  };
-  while (size > 34 && !fits()) size -= 2;
-  ctx.font = `800 ${size}px Inter`;
-  const tracking = trackingFor(size);
-  const block = size * lines.length + size * 0.18 * (lines.length - 1);
-  let y = -block / 2 + size / 2;
-  lines.forEach((line) => {
-    fillTracked(ctx, line, 0, y, 'center', tracking);
-    y += size + size * 0.18;
-  });
-  ctx.restore();
+  ctx.font = `800 ${type.size}px Inter`;
+  fillTracked(ctx, String(title || '').toUpperCase(), canvas.width / 2, canvas.height / 2, 'center', type.tracking);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -401,9 +393,9 @@ function blobTexture() {
   c.height = 512;
   const g = c.getContext('2d');
   const grd = g.createRadialGradient(256, 250, 20, 256, 256, 250);
-  grd.addColorStop(0, 'rgba(0,0,0,0.55)');
-  grd.addColorStop(0.55, 'rgba(0,0,0,0.2)');
-  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  grd.addColorStop(0, 'rgba(92,74,58,0.20)');
+  grd.addColorStop(0.5, 'rgba(92,74,58,0.07)');
+  grd.addColorStop(1, 'rgba(92,74,58,0)');
   g.fillStyle = grd;
   g.fillRect(0, 0, 512, 512);
   const tex = new THREE.CanvasTexture(c);
@@ -671,10 +663,10 @@ export async function createDesign(renderer, { reduce, projects }) {
   });
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050505);
+  scene.background = new THREE.Color('#e8e1d6');
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.22;
+  scene.environmentIntensity = 0.42;
   pmrem.dispose();
 
   const rough = roughTexture();
@@ -740,26 +732,20 @@ export async function createDesign(renderer, { reduce, projects }) {
   let viewW = 1;
   let viewH = 1;
 
-  scene.add(new THREE.HemisphereLight(0xf4f7fb, 0x1a1c20, 0.78));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
-  const key = new THREE.DirectionalLight(0xfff7ef, 2.35);
+  scene.add(new THREE.HemisphereLight(0xf7f1e8, 0xc4b5a4, 0.9));
+  scene.add(new THREE.AmbientLight(0xfff6ee, 0.34));
+  const key = new THREE.DirectionalLight(0xfff7ef, 1.55);
   key.position.set(-2.4, 3.6, 5.2);
   scene.add(key);
-  const fillLight = new THREE.DirectionalLight(0xe4edf8, 0.7);
+  const fillLight = new THREE.DirectionalLight(0xf3ece3, 0.42);
   fillLight.position.set(3.4, 0.4, 3.6);
   scene.add(fillLight);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.28);
+  const rim = new THREE.DirectionalLight(0xfff8f0, 0.16);
   rim.position.set(0.4, -2.2, 2.4);
   scene.add(rim);
 
-  const backdrop = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 18),
-    new THREE.MeshBasicMaterial({ color: 0x070707 }),
-  );
-  backdrop.position.z = -0.9;
-  scene.add(backdrop);
   const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.6, 3.3),
+    new THREE.PlaneGeometry(2.8, 1.9),
     new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }),
   );
   shadow.position.set(0.05, -0.04, -0.5);
@@ -856,7 +842,14 @@ export async function createDesign(renderer, { reduce, projects }) {
   const tabCount = Math.max(1, sections.length);
   const tabSpan = (PAGE_H - tabMargin * 2) / tabCount;
   const tabH = tabSpan * 0.9;
-  const tabGeo = tabGeometry(TAB_W, tabH);
+  if (document.fonts?.load) {
+    try { await document.fonts.load(`800 ${TAB_FONT}px Inter`); } catch (err) { /* measure with the fallback face */ }
+  }
+  const tabType = tabTypeFor(sections.map((section) => section.label));
+  const labelH = tabH * 0.78;
+  const labelW = labelH * (tabType.width / tabType.height);
+  const tabW = labelW / 0.84;
+  const tabGeo = tabGeometry(tabW, tabH);
   const tabs = sections.map((section, i) => {
     const fg = luminance(section.color) > 0.58 ? INK : '#f6f3ee';
     const group = new THREE.Group();
@@ -865,11 +858,9 @@ export async function createDesign(renderer, { reduce, projects }) {
       tabGeo,
       new THREE.MeshBasicMaterial({ color: section.color, side: THREE.DoubleSide }),
     );
-    const labelW = TAB_W * 0.88;
-    const labelH = Math.min(tabH * 0.9, labelW * (440 / 640));
     const label = new THREE.Mesh(
       new THREE.PlaneGeometry(labelW, labelH),
-      new THREE.MeshBasicMaterial({ map: tabTexture(section.label, fg), transparent: true, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: tabTexture(section.label, fg, tabType), transparent: true, depthWrite: false }),
     );
     label.position.z = 0.012;
     body.renderOrder = 2;
@@ -891,7 +882,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     const outward = Math.cos(angle) >= 0 ? 1 : -1;
     const edge = GUTTER + PAGE_W;
     tab.group.position.set(
-      Math.cos(angle) * edge + outward * (TAB_W / 2),
+      Math.cos(angle) * edge + outward * (tabW / 2),
       tab.y,
       Math.sin(angle) * 0.18,
     );
@@ -925,7 +916,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (graded) return;
     graded = true;
-    renderer.toneMappingExposure = gradeSaved.exposure * 1.14;
+    renderer.toneMappingExposure = gradeSaved.exposure;
   }
 
   function gradeOff() {
@@ -1053,12 +1044,12 @@ export async function createDesign(renderer, { reduce, projects }) {
     const focusY = 0;
     if (which === 0) {
       const left = -HOLE_X - 0.02;
-      const right = GUTTER + PAGE_W + TAB_W + 0.04;
+      const right = GUTTER + PAGE_W + tabW + 0.04;
       halfW = (right - left) / 2;
       halfH = PAGE_H / 2 + 0.04;
       focusX = (left + right) / 2;
     } else {
-      halfW = GUTTER + PAGE_W + TAB_W + (narrow ? 0.1 : 0.05);
+      halfW = GUTTER + PAGE_W + tabW + (narrow ? 0.1 : 0.05);
       halfH = PAGE_H / 2 + 0.04;
       focusX = 0;
     }
