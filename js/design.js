@@ -393,9 +393,9 @@ function blobTexture() {
   c.height = 512;
   const g = c.getContext('2d');
   const grd = g.createRadialGradient(256, 250, 20, 256, 256, 250);
-  grd.addColorStop(0, 'rgba(0,0,0,0.55)');
-  grd.addColorStop(0.55, 'rgba(0,0,0,0.2)');
-  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  grd.addColorStop(0, 'rgba(92,74,58,0.20)');
+  grd.addColorStop(0.5, 'rgba(92,74,58,0.07)');
+  grd.addColorStop(1, 'rgba(92,74,58,0)');
   g.fillStyle = grd;
   g.fillRect(0, 0, 512, 512);
   const tex = new THREE.CanvasTexture(c);
@@ -744,14 +744,8 @@ export async function createDesign(renderer, { reduce, projects }) {
   rim.position.set(0.4, -2.2, 2.4);
   scene.add(rim);
 
-  const backdrop = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 18),
-    new THREE.MeshBasicMaterial({ color: 0xe8e1d6 }),
-  );
-  backdrop.position.z = -0.9;
-  scene.add(backdrop);
   const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.6, 3.3),
+    new THREE.PlaneGeometry(2.8, 1.9),
     new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }),
   );
   shadow.position.set(0.05, -0.04, -0.5);
@@ -922,7 +916,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   function gradeOn() {
     if (graded) return;
     graded = true;
-    renderer.toneMappingExposure = gradeSaved.exposure * 1.04;
+    renderer.toneMappingExposure = gradeSaved.exposure;
   }
 
   function gradeOff() {
