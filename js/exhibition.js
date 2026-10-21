@@ -3,8 +3,8 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 
 // Art is a gallery wall. 00 is the whole room, pulled back far enough that
 // the tops of the pieces stay in frame. Each later number glides to one work.
-// The label is printed on the wall itself. A line is omitted when the piece
-// has no data for it.
+// The label is printed in the room. A line is omitted when the piece has no
+// data for it. The sculpture label sits beside the plinth.
 
 function sampleSculpture(x) {
   const pts = [];
@@ -67,7 +67,7 @@ function labelTexture(piece, renderer) {
   canvas.height = 640;
   const g = canvas.getContext('2d');
   g.clearRect(0, 0, canvas.width, canvas.height);
-  g.fillStyle = 'rgba(255, 250, 244, 0.96)';
+  g.fillStyle = '#1d1b19';
   g.textAlign = 'left';
   g.textBaseline = 'top';
   let y = 6;
@@ -118,38 +118,6 @@ function labelTexture(piece, renderer) {
   return { tex, aspect: tight.width / tight.height };
 }
 
-function wallTexture() {
-  const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 512;
-  const g = c.getContext('2d');
-  g.fillStyle = '#3a3834';
-  g.fillRect(0, 0, 512, 512);
-  const img = g.getImageData(0, 0, 512, 512);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 26;
-    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
-    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n * 0.94));
-    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n * 0.82));
-  }
-  g.putImageData(img, 0, 0);
-  g.strokeStyle = 'rgba(255,255,255,0.03)';
-  for (let i = 0; i < 18; i += 1) {
-    g.lineWidth = 8 + Math.random() * 20;
-    g.beginPath();
-    const y = Math.random() * 512;
-    g.moveTo(0, y);
-    g.bezierCurveTo(160, y + 12, 340, y - 10, 512, y + 4);
-    g.stroke();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(5, 2.4);
-  return tex;
-}
-
 function woodTexture() {
   const c = document.createElement('canvas');
   c.width = 256;
@@ -184,8 +152,8 @@ function poolTexture() {
   c.height = 512;
   const g = c.getContext('2d');
   const gr = g.createRadialGradient(256, 200, 10, 256, 230, 255);
-  gr.addColorStop(0, 'rgba(255, 214, 160, 0.72)');
-  gr.addColorStop(0.42, 'rgba(255, 186, 110, 0.28)');
+  gr.addColorStop(0, 'rgba(255, 214, 160, 0.45)');
+  gr.addColorStop(0.42, 'rgba(255, 186, 110, 0.16)');
   gr.addColorStop(1, 'rgba(255, 170, 90, 0)');
   g.fillStyle = gr;
   g.fillRect(0, 0, 512, 512);
@@ -246,36 +214,33 @@ function addWoodFrame(scene, x, y, w, h, mat) {
 
 export async function createExhibition(renderer, { reduce, pieces }) {
   const scene = new THREE.Scene();
-  const BG = new THREE.Color('#2a2826');
+  const BG = new THREE.Color('#e6dfd4');
   scene.background = BG;
   scene.fog = new THREE.Fog(BG, 24, 48);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
-  scene.environmentIntensity = 0.22;
+  scene.environmentIntensity = 0.35;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
-  scene.add(new THREE.AmbientLight(0xfff5ea, 0.62));
-  scene.add(new THREE.HemisphereLight(0xc4beb6, 0x3a342e, 0.85));
-  const wallFill = new THREE.DirectionalLight(0xffecd4, 1.15);
-  wallFill.position.set(0.4, 4.2, 7);
-  scene.add(wallFill);
+  scene.add(new THREE.AmbientLight(0xfff5ea, 0.35));
+  scene.add(new THREE.HemisphereLight(0xfff8f0, 0xb7aa9a, 0.45));
 
   const wall = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 10),
-    new THREE.MeshStandardMaterial({ map: wallTexture(), color: 0xffffff, roughness: 0.92 }),
+    new THREE.MeshStandardMaterial({ color: 0xe7e0d6, roughness: 0.94 }),
   );
   wall.position.y = 2.6;
   wall.receiveShadow = true;
   scene.add(wall);
   const rail = new THREE.Mesh(
     new THREE.BoxGeometry(40, 0.035, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.45, metalness: 0.35 }),
+    new THREE.MeshStandardMaterial({ color: 0xcfc6ba, roughness: 0.5, metalness: 0.15 }),
   );
   rail.position.set(0, 4.15, 0.02);
   scene.add(rail);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 24),
-    new THREE.MeshStandardMaterial({ color: 0x4a433c, roughness: 0.92 }),
+    new THREE.MeshStandardMaterial({ color: 0xcfc4b6, roughness: 0.9 }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.z = 4;
@@ -283,7 +248,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   scene.add(floor);
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(40, 0.16, 0.12),
-    new THREE.MeshStandardMaterial({ color: 0x3a342e, roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: 0xb7aea2, roughness: 0.7 }),
   );
   base.position.set(0, 0.08, 0.04);
   scene.add(base);
@@ -318,7 +283,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   const poolMap = poolTexture();
   works.forEach((p) => {
     const x = p.x;
-    const spot = new THREE.SpotLight(0xffe0b0, 24, 8.5, 0.46, 0.5, 1.05);
+    const spot = new THREE.SpotLight(0xffe0b0, 14, 9, 0.42, 0.45, 1);
     spot.position.set(x, 4.7, 2.5);
     spot.target.position.set(x, 2.15, 0.08);
     scene.add(spot, spot.target);
@@ -353,13 +318,16 @@ export async function createExhibition(renderer, { reduce, pieces }) {
         scene.add(sampleSculpture(x));
       }
     } else {
-      addWoodFrame(scene, x, 2.15, 1.82, 2.18, wood);
+      const frameW = 1.82;
+      const frameH = 2.18;
+      const mould = 0.11;
+      addWoodFrame(scene, x, 2.15, frameW, frameH, wood);
       if (p.tex) {
         const art = new THREE.Mesh(
-          new THREE.PlaneGeometry(1.38, 1.72),
+          new THREE.PlaneGeometry(frameW - mould * 2 + 0.05, frameH - mould * 2 + 0.05),
           new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 }),
         );
-        art.position.set(x, 2.15, 0.04);
+        art.position.set(x, 2.15, 0.018);
         scene.add(art);
       }
     }
@@ -420,9 +388,9 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const aspect = label.aspect || 2.4;
     const b = pieceBox(work);
     if (work.kind === 'sculpture') {
-      const w = narrow ? 0.92 : 0.7;
+      const w = narrow ? 0.95 : 0.82;
       const h = w / aspect;
-      return { x: work.x + 0.62, y: 1.22, w, h, z: 0.04 };
+      return { x: work.x + 0.35 + 0.08 + w / 2, y: 0.58, w, h, z: 1.55 };
     }
     if (narrow) {
       const w = 1.45;
