@@ -5,7 +5,8 @@ import { ARTIST } from './projects.js';
 // Design is a ring binder on the same bone ground as the other scenes.
 // 00 is the closed cover. Each later number is one project, in category
 // order. Only the first project of a category has a divider tab, labelled
-// with that category in one horizontal size. Every page in that category
+// with that category in one horizontal size. A two-word label wraps so the
+// tab only sticks out a short way past the page. Every page in that category
 // uses the tab colour. The page turns around the rings.
 
 const TEX_W = 720;
@@ -330,26 +331,39 @@ function coverFooter() {
   return [words[0] || '', words[1] || '', words[2] || ''];
 }
 
-// One size for every tab, chosen so the longest label fits on one horizontal line.
-const TAB_FONT = 128;
-const TAB_TRACK = 1.5;
+// Short stick-out, like an index divider. The word stays horizontal.
+// Two-word labels wrap onto two lines instead of lengthening the tab.
+const TAB_FONT = 120;
+const TAB_TRACK = 1;
+const TAB_STICK = 0.26;
+
+function labelLines(label) {
+  const words = String(label || '').toUpperCase().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [words[0] || ''];
+  if (words.length === 2) return words;
+  return [words.slice(0, -1).join(' '), words[words.length - 1]];
+}
 
 function tabTypeFor(labels) {
   const probe = document.createElement('canvas').getContext('2d');
   probe.font = `800 ${TAB_FONT}px Inter`;
-  const lines = labels.map((label) => String(label || '').toUpperCase());
-  const widest = Math.max(1, ...lines.map((line) => trackedWidth(probe, line, TAB_TRACK)));
-  const padX = Math.round(TAB_FONT * 0.34);
-  const padY = Math.round(TAB_FONT * 0.28);
+  const layouts = labels.map(labelLines);
+  const widest = Math.max(1, ...layouts.flat().map((line) => trackedWidth(probe, line, TAB_TRACK)));
+  const maxLines = Math.max(1, ...layouts.map((lines) => lines.length));
+  const padX = Math.round(TAB_FONT * 0.14);
+  const padY = Math.round(TAB_FONT * 0.1);
+  const lineH = Math.round(TAB_FONT * 1.12);
   return {
     size: TAB_FONT,
     tracking: TAB_TRACK,
+    lineH,
     width: Math.ceil(widest + padX * 2),
-    height: Math.ceil(TAB_FONT * 1.15 + padY * 2),
+    height: Math.ceil(maxLines * lineH + padY * 2),
   };
 }
 
 function tabTexture(title, fg, type) {
+  const lines = labelLines(title);
   const canvas = document.createElement('canvas');
   canvas.width = type.width;
   canvas.height = type.height;
@@ -358,7 +372,12 @@ function tabTexture(title, fg, type) {
   ctx.fillStyle = fg;
   ctx.textBaseline = 'middle';
   ctx.font = `800 ${type.size}px Inter`;
-  fillTracked(ctx, String(title || '').toUpperCase(), canvas.width / 2, canvas.height / 2, 'center', type.tracking);
+  const block = type.lineH * lines.length;
+  let y = canvas.height / 2 - block / 2 + type.lineH / 2;
+  lines.forEach((line) => {
+    fillTracked(ctx, line, canvas.width / 2, y, 'center', type.tracking);
+    y += type.lineH;
+  });
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -846,8 +865,15 @@ export async function createDesign(renderer, { reduce, projects }) {
     try { await document.fonts.load(`800 ${TAB_FONT}px Inter`); } catch (err) { /* measure with the fallback face */ }
   }
   const tabType = tabTypeFor(sections.map((section) => section.label));
-  const labelH = tabH * 0.78;
-  const labelW = labelH * (tabType.width / tabType.height);
+  const innerW = TAB_STICK * 0.84;
+  const innerH = tabH * 0.82;
+  const aspect = tabType.width / tabType.height;
+  let labelW = innerW;
+  let labelH = labelW / aspect;
+  if (labelH > innerH) {
+    labelH = innerH;
+    labelW = labelH * aspect;
+  }
   const tabW = labelW / 0.84;
   const tabGeo = tabGeometry(tabW, tabH);
   const tabs = sections.map((section, i) => {
@@ -1049,12 +1075,12 @@ export async function createDesign(renderer, { reduce, projects }) {
       halfH = PAGE_H / 2 + 0.04;
       focusX = (left + right) / 2;
     } else {
-      halfW = GUTTER + PAGE_W + tabW + (narrow ? 0.1 : 0.05);
+      halfW = GUTTER + PAGE_W + tabW + (narrow ? 0.04 : 0.05);
       halfH = PAGE_H / 2 + 0.04;
       focusX = 0;
     }
     const distV = halfH / (tanV * usable * 0.93);
-    const distH = halfW / (tanH * (narrow ? 0.94 : 0.93));
+    const distH = halfW / (tanH * (narrow ? 0.98 : 0.93));
     const dist = Math.max(distV, distH) * (narrow ? 1.0 : 1.04);
     const topLimit = 1 - 2 * top;
     const botLimit = -1 + 2 * bottom;
