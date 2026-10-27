@@ -1,15 +1,28 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
-import { makeTextures, makeClay } from './clay.js';
 
 const TAU = Math.PI * 2;
-const CONTACT = [[2.5, 0.9], [1.6, 0.9], [1.5, 1.5], [1.9, 1.9], [1.15, 1.15]];
+const RINGS = 80;
+const SEGS = 96;
 
-function spanFor(shape) {
-  if (shape < 2.5) return 1.42;
-  if (shape < 3.5) return 0.62;
-  return 1.52;
-}
+const CLAY_TONES = [
+  {
+    id: 'terracotta',
+    label: 'Terracotta clay',
+    color: 'assets/hanouf/pottery/textures/clay-terracotta-color.jpg',
+    rough: 'assets/hanouf/pottery/textures/clay-terracotta-roughness.jpg',
+    normal: 'assets/hanouf/pottery/textures/clay-terracotta-normal.jpg',
+    splat: '#8a4530',
+  },
+  {
+    id: 'stoneware',
+    label: 'Stoneware clay',
+    color: 'assets/hanouf/pottery/textures/clay-stoneware-color.jpg',
+    rough: 'assets/hanouf/pottery/textures/clay-stoneware-roughness.jpg',
+    normal: 'assets/hanouf/pottery/textures/clay-stoneware-normal.jpg',
+    splat: '#8a8884',
+  },
+];
 
 function parseOBJ(text) {
   const positions = [];
@@ -46,8 +59,8 @@ function fitGeo(geo, height) {
   geo.computeBoundingBox();
   const fitted = geo.boundingBox;
   const half = Math.max(fitted.max.x, -fitted.min.x, fitted.max.z, -fitted.min.z);
-  if (half > 0.9) {
-    const k = 0.9 / half;
+  if (half > 1.12) {
+    const k = 1.12 / half;
     geo.scale(k, k, k);
   }
   geo.computeVertexNormals();
@@ -60,7 +73,7 @@ async function loadModel(item) {
     const res = await fetch(encodeURI(item.model));
     if (!res.ok) return null;
     const geo = fitGeo(parseOBJ(await res.text()), item.height || 1);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    const finish = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: item.color || '#c4b09a',
       roughness: item.roughness == null ? 0.72 : item.roughness,
       metalness: item.metalness == null ? 0.02 : item.metalness,
@@ -68,28 +81,153 @@ async function loadModel(item) {
       transparent: true,
       opacity: 0,
     }));
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.visible = false;
-    return mesh;
+    const clay = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.94,
+      metalness: 0,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    }));
+    finish.castShadow = finish.receiveShadow = true;
+    clay.castShadow = clay.receiveShadow = true;
+    finish.visible = false;
+    clay.visible = false;
+    return { finish, clay, shell: shellOf(geo) };
   } catch (err) {
     return null;
   }
 }
 
-function loadPhoto(url, renderer) {
+function loadMap(url, colorSpace, renderer) {
   return new Promise((resolve) => {
     if (!url) { resolve(null); return; }
-    const loader = new THREE.TextureLoader();
-    loader.load(url, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
+    new THREE.TextureLoader().load(url, (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(2.2, 1.6);
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      if (colorSpace) tex.colorSpace = colorSpace;
       tex.needsUpdate = true;
       resolve(tex);
     }, undefined, () => resolve(null));
   });
+}
+
+function shellOf(geo) {
+  const pos = geo.attributes.position;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < pos.count; i += 1) {
+    const y = pos.getY(i);
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const height = Math.max(0.0001, maxY - minY);
+  const bins = new Float32Array(RINGS * SEGS);
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const yi = Math.min(RINGS - 1, Math.max(0, Math.round(((y - minY) / height) * (RINGS - 1))));
+    let theta = Math.atan2(z, x);
+    if (theta < 0) theta += TAU;
+    const ti = Math.min(SEGS - 1, Math.floor((theta / TAU) * SEGS));
+    const r = Math.hypot(x, z);
+    const k = yi * SEGS + ti;
+    if (r > bins[k]) bins[k] = r;
+  }
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next = new Float32Array(bins);
+    for (let y = 0; y < RINGS; y += 1) {
+      for (let t = 0; t < SEGS; t += 1) {
+        if (bins[y * SEGS + t] > 0) continue;
+        let acc = 0;
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= RINGS) continue;
+          for (let dt = -1; dt <= 1; dt += 1) {
+            const v = bins[yy * SEGS + ((t + dt + SEGS) % SEGS)];
+            if (v > 0) { acc += v; n += 1; }
+          }
+        }
+        if (n) next[y * SEGS + t] = acc / n;
+      }
+    }
+    bins.set(next);
+  }
+  const smooth = new Float32Array(bins);
+  for (let y = 0; y < RINGS; y += 1) {
+    for (let t = 0; t < SEGS; t += 1) {
+      let acc = 0;
+      let w = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const yy = Math.min(RINGS - 1, Math.max(0, y + dy));
+        for (let dt = -1; dt <= 1; dt += 1) {
+          const weight = dy === 0 && dt === 0 ? 2 : 1;
+          acc += bins[yy * SEGS + ((t + dt + SEGS) % SEGS)] * weight;
+          w += weight;
+        }
+      }
+      smooth[y * SEGS + t] = acc / w;
+    }
+  }
+  const out = new Float32Array(RINGS * SEGS * 3);
+  for (let y = 0; y < RINGS; y += 1) {
+    const fy = y / (RINGS - 1);
+    const yy = minY + fy * height;
+    for (let t = 0; t < SEGS; t += 1) {
+      const theta = (t / SEGS) * TAU;
+      const r = Math.max(0.02, smooth[y * SEGS + t]);
+      const i = y * SEGS + t;
+      out[i * 3] = Math.cos(theta) * r;
+      out[i * 3 + 1] = yy;
+      out[i * 3 + 2] = Math.sin(theta) * r;
+    }
+  }
+  return out;
+}
+
+function makeShellGeometry() {
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(RINGS * SEGS * 3);
+  const uvs = new Float32Array(RINGS * SEGS * 2);
+  for (let y = 0; y < RINGS; y += 1) {
+    for (let t = 0; t < SEGS; t += 1) {
+      const i = y * SEGS + t;
+      uvs[i * 2] = t / SEGS;
+      uvs[i * 2 + 1] = y / (RINGS - 1);
+    }
+  }
+  const idx = [];
+  for (let y = 0; y < RINGS - 1; y += 1) {
+    for (let t = 0; t < SEGS; t += 1) {
+      const t2 = (t + 1) % SEGS;
+      const a = y * SEGS + t;
+      const b = y * SEGS + t2;
+      const c = (y + 1) * SEGS + t;
+      const d = (y + 1) * SEGS + t2;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geo.setIndex(idx);
+  return geo;
+}
+
+function writeShell(geo, positions) {
+  const attr = geo.attributes.position;
+  attr.array.set(positions);
+  attr.needsUpdate = true;
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+}
+
+function lerpShell(out, a, b, t) {
+  const k = t * t * (3 - 2 * t);
+  for (let i = 0; i < out.length; i += 1) out[i] = a[i] + (b[i] - a[i]) * k;
 }
 
 export async function createCeramics(renderer, { reduce, projects }) {
@@ -102,7 +240,7 @@ export async function createCeramics(renderer, { reduce, projects }) {
   scene.environmentIntensity = 0.55;
 
   const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 60);
-  const LOOK = new THREE.Vector3(0, 0.45, 0);
+  const LOOK = new THREE.Vector3(0, 1.02, 0);
 
   const key = new THREE.DirectionalLight(0xfff1e0, 2.6);
   key.position.set(-3.5, 6, 4);
@@ -201,10 +339,26 @@ export async function createCeramics(renderer, { reduce, projects }) {
   contact.position.y = 0.002;
   wheel.add(contact);
 
-  const clay = makeClay(makeTextures());
-  clay.scale.setScalar(1.15);
-  wheel.add(clay);
-  const U = clay.material.uniforms;
+  const tones = await Promise.all(CLAY_TONES.map(async (tone) => ({
+    ...tone,
+    colorMap: await loadMap(tone.color, THREE.SRGBColorSpace, renderer),
+    roughMap: await loadMap(tone.rough, null, renderer),
+    normalMap: await loadMap(tone.normal, null, renderer),
+  })));
+
+  const shellPositions = new Float32Array(RINGS * SEGS * 3);
+  const shellGeo = makeShellGeometry();
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: '#ffffff',
+    roughness: 0.94,
+    metalness: 0,
+    side: THREE.DoubleSide,
+    normalScale: new THREE.Vector2(0.7, 0.7),
+  });
+  const shell = new THREE.Mesh(shellGeo, shellMat);
+  shell.castShadow = shell.receiveShadow = true;
+  shell.visible = false;
+  wheel.add(shell);
 
   const MAXP = 280;
   const splMat = new THREE.MeshStandardMaterial({ color: 0x7c4329, roughness: 0.3, metalness: 0 });
@@ -270,13 +424,14 @@ export async function createCeramics(renderer, { reduce, projects }) {
     spl.instanceMatrix.needsUpdate = true;
   }
 
-  const list = projects.length ? projects : [{ shape: 2, title: '', text: '', images: [], rest: true }];
-  const photos = await Promise.all(list.map((item) => loadPhoto(item.images && item.images[0], renderer)));
+  const list = projects.length ? projects : [{ title: '', text: '', rest: true }];
   const models = await Promise.all(list.map((item) => loadModel(item)));
-  models.forEach((mesh) => { if (mesh) wheel.add(mesh); });
-  const blank = new THREE.DataTexture(new Uint8Array([180, 100, 70, 255]), 1, 1);
-  blank.colorSpace = THREE.SRGBColorSpace;
-  blank.needsUpdate = true;
+  const choice = list.map((_, i) => i % tones.length);
+  models.forEach((entry) => {
+    if (!entry) return;
+    wheel.add(entry.finish);
+    wheel.add(entry.clay);
+  });
   let cur = 0;
   let next = 0;
   let t = 0;
@@ -286,30 +441,95 @@ export async function createCeramics(renderer, { reduce, projects }) {
   let autoUntil = 0;
   let emitAcc = 0;
   const N = list.length;
-  const shapeOf = (i) => (list[(i + N) % N].shape ?? 2);
-  U.uA.value = U.uB.value = shapeOf(0);
-
-  function showPhoto(i) {
-    const tex = photos[(i + N) % N];
-    U.uPhoto.value = tex || blank;
-    U.uHasPhoto.value = tex ? 1 : 0;
-    U.uSpan.value = spanFor(shapeOf(i));
-  }
-  showPhoto(0);
-  U.uFinish.value = 0;
-
   let hidden = false;
   let fade = 0;
-  let shownFor = -1;
+
+  function tonePack(i) {
+    return tones[choice[(i + N) % N]] || tones[0];
+  }
+
+  function paintClay(material, pack) {
+    if (!material || !pack) return;
+    material.map = pack.colorMap;
+    material.roughnessMap = pack.roughMap;
+    material.normalMap = pack.normalMap;
+    material.color.set('#ffffff');
+    material.metalness = 0;
+    material.roughness = 0.94;
+    material.needsUpdate = true;
+  }
+
+  function applyChoice(i) {
+    const entry = models[(i + N) % N];
+    const pack = tonePack(i);
+    if (entry) paintClay(entry.clay.material, pack);
+    paintClay(shellMat, pack);
+    splMat.color.set(pack.splat);
+    syncTones();
+  }
+
+  function footprint(i) {
+    const entry = models[(i + N) % N];
+    if (!entry) return 1.3;
+    let maxR = 0.2;
+    const src = entry.shell;
+    for (let k = 0; k < src.length; k += 3) maxR = Math.max(maxR, Math.hypot(src[k], src[k + 2]));
+    return Math.min(2.3, Math.max(0.75, maxR * 2.2));
+  }
+
+  function showEntry(i, clayOpacity, finishOpacity) {
+    models.forEach((entry, idx) => {
+      if (!entry) return;
+      const on = idx === i;
+      entry.clay.visible = on && clayOpacity > 0.02;
+      entry.finish.visible = on && finishOpacity > 0.02;
+      entry.clay.material.opacity = on ? clayOpacity : 0;
+      entry.finish.material.opacity = on ? finishOpacity : 0;
+      entry.clay.material.depthWrite = clayOpacity > 0.85;
+      entry.finish.material.depthWrite = finishOpacity > 0.85;
+    });
+  }
+
+  const toneRoot = document.createElement('div');
+  toneRoot.id = 'clayTones';
+  toneRoot.hidden = true;
+  tones.forEach((pack, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.tone = String(index);
+    button.setAttribute('aria-label', pack.label);
+    button.title = pack.label;
+    if (pack.colorMap && pack.colorMap.image) {
+      button.style.backgroundImage = `url(${pack.color})`;
+    } else {
+      button.style.background = pack.splat;
+    }
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const target = trans ? next : cur;
+      choice[target] = index;
+      applyChoice(target);
+    });
+    toneRoot.appendChild(button);
+  });
+  document.body.appendChild(toneRoot);
+
+  function syncTones() {
+    const selected = choice[cur];
+    [...toneRoot.children].forEach((button, index) => {
+      button.classList.toggle('on', index === selected);
+    });
+  }
+  applyChoice(0);
 
   function resize(w, h) {
     const asp = w / h;
     camera.aspect = asp;
     const mobile = asp < 0.85;
-    const dist = mobile ? 11.4 : 8.4;
-    camera.position.set(0, dist * (mobile ? 0.46 : 0.38), dist);
+    const dist = mobile ? 7.6 : 5.85;
+    camera.position.set(0, dist * (mobile ? 0.42 : 0.34), dist);
     camera.lookAt(LOOK);
-    if (mobile) camera.setViewOffset(w, h, 0, h * 0.2, w, h);
+    if (mobile) camera.setViewOffset(w, h, 0, h * 0.06, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
@@ -317,13 +537,15 @@ export async function createCeramics(renderer, { reduce, projects }) {
   function begin(dir) {
     if (trans || N < 2) return false;
     next = (cur + dir + N) % N;
+    if (!models[cur] || !models[next]) return false;
     trans = true;
     t = 0;
     hidden = true;
-    U.uA.value = shapeOf(cur);
-    U.uB.value = shapeOf(next);
     fade = 0;
-    U.uFinish.value = 0;
+    showEntry(-1, 0, 0);
+    applyChoice(next);
+    writeShell(shellGeo, models[cur].shell);
+    shell.visible = true;
     autoUntil = performance.now() + (reduce ? 0 : 2200);
     return true;
   }
@@ -333,13 +555,11 @@ export async function createCeramics(renderer, { reduce, projects }) {
     trans = false;
     t = 0;
     hidden = false;
-    shownFor = cur;
-    U.uA.value = U.uB.value = shapeOf(cur);
-    U.uT.value = 0;
-    showPhoto(cur);
+    shell.visible = false;
+    applyChoice(cur);
+    showEntry(cur, 1, 0);
   }
 
-  const camObj = new THREE.Vector3();
   const MAXV = 13;
   function update(dt, now) {
     const driving = now < autoUntil;
@@ -366,35 +586,25 @@ export async function createCeramics(renderer, { reduce, projects }) {
     }
     wheel.rotation.y = angle;
     const spin = vel / MAXV;
-    U.uT.value = trans ? Math.min(t, 1) : 0;
     const stopped = !trans && !hidden && vel === 0 && now >= autoUntil;
-    if (!stopped) fade = 0;
-    else if (reduce) fade = 1;
-    else fade = Math.min(1, fade + dt);
-    const blend = fade * fade * (3 - 2 * fade);
-    const revealing = stopped && !!models[cur];
-    U.uFinish.value = revealing ? 0 : blend;
-    U.uAlpha.value = revealing ? 1 - blend : 1;
-    clay.visible = U.uAlpha.value > 0.03;
-    clay.material.depthWrite = U.uAlpha.value > 0.92;
-    models.forEach((mesh, i) => {
-      if (!mesh) return;
-      const on = revealing && i === cur && blend > 0.02;
-      mesh.visible = on;
-      mesh.material.opacity = on ? blend : 0;
-    });
-    U.uSpin.value = spin;
-    U.uTime.value = now / 1000;
-    camObj.copy(camera.position);
-    clay.worldToLocal(camObj);
-    U.uCamObj.value.copy(camObj);
-    const a = CONTACT[shapeOf(cur)] || CONTACT[2];
-    const b = CONTACT[shapeOf(next)] || CONTACT[2];
-    const k = U.uT.value;
-    const lump = Math.sin(Math.PI * k);
-    const sx = THREE.MathUtils.lerp(a[0], b[0], k) * (1 - lump * 0.5);
-    const sz = THREE.MathUtils.lerp(a[1], b[1], k) * (1 - lump * 0.2) + lump * 0.3;
-    contact.scale.set(sx, sz, 1);
+    if (trans && models[cur] && models[next]) {
+      const k = Math.min(t, 1);
+      lerpShell(shellPositions, models[cur].shell, models[next].shell, k);
+      writeShell(shellGeo, shellPositions);
+      shell.visible = true;
+      showEntry(-1, 0, 0);
+      const span = THREE.MathUtils.lerp(footprint(cur), footprint(next), k);
+      contact.scale.set(span, span, 1);
+    } else if (!trans && models[cur]) {
+      if (!stopped) fade = 0;
+      else if (reduce) fade = 1;
+      else fade = Math.min(1, fade + dt);
+      const blend = fade * fade * (3 - 2 * fade);
+      shell.visible = false;
+      showEntry(cur, 1 - blend, blend);
+      const span = footprint(cur);
+      contact.scale.set(span, span, 1);
+    }
     updateParticles(dt);
     if (!reduce) camera.position.x = Math.sin(now / 4000) * 0.08;
     camera.lookAt(LOOK);
@@ -414,6 +624,7 @@ export async function createCeramics(renderer, { reduce, projects }) {
     update,
     step: begin,
     spin: () => vel / MAXV,
+    setTonesVisible(on) { toneRoot.hidden = !on; },
     nav() {
       const real = projects.length;
       return {

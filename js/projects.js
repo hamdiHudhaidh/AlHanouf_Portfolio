@@ -4,18 +4,17 @@
 // the Q-Bix profile, the Tazo menu, and the Himmtk colour specs).
 // If a year, role, or medium was not published, leave it out.
 //
-// CERAMICS items: { title, text?, year?, shape, model?, height?, color?, metalness?, roughness? }
-//   shape is the clay thrown on the wheel: 2 bottle, 3 bowl, 4 tall vase.
-//   model is a local OBJ shown only after the wheel has fully stopped.
+// CERAMICS items: { title, text?, year?, model?, height?, color?, metalness?, roughness? }
+//   model is a local OBJ. The wheel throws that model's own silhouette in clay,
+//   then the finished colour fades in after the wheel has fully stopped.
 // EXHIBITION items: { kind: 'painting' | 'sculpture', model?: 'tower' | 'pendant', title, image?, artist?, year?, medium?, dimensions?, description? }
 // DESIGN items: { slug, title, category, text?, year?, label?, rightTitle?, rightText?, sheet?, swatches?, slots, source, links? }
 //   category is a word copied from that project's title or text. It only groups
 //   the binder: same category stays together, and only the first page of the
 //   group gets a divider tab. Do not invent a word that is not in the project.
-//   slots are the ten Meqaf-binder tiles, in order:
-//   logo, three across, square, wide, then the four application tiles.
+//   slots are that project's images and videos, in the order they should be read.
 //   { kind: 'image' | 'video' | 'website', src, poster?, href? }
-//   sheet is a brand colour printed on the project. Otherwise the page uses its category colour.
+//   Pages stay the cover white. sheet is unused for the page; the tab keeps the category colour.
 //   swatches are { hex, name? } and only include names that are printed.
 
 export const ARTIST = {
@@ -47,15 +46,13 @@ const gameId = 'assets/hanouf/design/game identity design';
 export const CERAMICS = [
   {
     title: 'Untitled',
-    shape: 4,
     model: 'assets/hanouf/pottery/MODLE 5.1.obj',
-    height: 1.32,
+    height: 2.45,
   },
   {
     title: 'Untitled',
-    shape: 3,
     model: 'assets/hanouf/pottery/alhanouf1.obj',
-    height: 0.72,
+    height: 1.85,
     color: '#2c2c2c',
     metalness: 0.5,
     roughness: 0.5,

@@ -1,0 +1,19 @@
+Clay textures used on the wheel while a piece is still clay.
+
+Both sets are CC0 1.0 (public domain) from ambientCG.
+https://creativecommons.org/publicdomain/zero/1.0/
+https://ambientcg.com/
+
+Terracotta / red clay
+  Source: ambientCG Clay001
+  https://ambientcg.com/view?id=Clay001
+  Files: clay-terracotta-color.jpg, clay-terracotta-roughness.jpg, clay-terracotta-normal.jpg
+  Maps: 1K JPG color, roughness, and OpenGL normal. Other maps from the pack were not included.
+
+Pale stoneware / grey clay
+  Source: ambientCG Clay004
+  https://ambientcg.com/view?id=Clay004
+  Files: clay-stoneware-color.jpg, clay-stoneware-roughness.jpg, clay-stoneware-normal.jpg
+  Maps: 1K JPG color, roughness, and OpenGL normal. Other maps from the pack were not included.
+
+No attribution is required. The names above are kept so the source stays findable.
