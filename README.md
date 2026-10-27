@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is a ring binder. Ceramics is a potter’s wheel. Art is a gallery wall. Her published site has graphic-design projects only. Ceramics and Art currently hold clearly marked sample pieces so those scenes can be tried. They are not her work. Delete the SAMPLE block in `js/projects.js` to empty the scenes, or replace that block with her pieces.
+The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is a ring binder. Ceramics is a potter’s wheel. Art is a gallery wall. Design uses her published projects plus the work in `assets/hanouf/`. Ceramics shows her two pottery models. Art shows two prints and two rebuilt sculptures. A line is printed only when it comes from her site or from text on the work itself.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -13,15 +13,15 @@ The page has four scenes: About, Ceramics, Design, and Art. About is a still edi
 | Scene | Hash | What you see |
 | --- | --- | --- |
 | About | `#about` | Placeholder portrait, her welcome line, LinkedIn and WhatsApp |
-| Ceramics | `#ceramics` | The wheel. Three sample vessels are thrown in clay. After the wheel stops, the clay fades into the project photo |
-| Design | `#design` | A coloured ring binder on the same bone ground as the other scenes. 00 is the cover. Projects are grouped by category, and the first of each group has a divider tab |
-| Art | `#art` | Gallery wall. 00 is the whole room. Three sample paintings in carved wood frames and one sample sculpture, each with a wall label |
+| Ceramics | `#ceramics` | The wheel. Two of her models. The piece stays clay while the wheel is moving, and the model fades in only after the wheel has fully stopped |
+| Design | `#design` | A coloured ring binder on the same bone ground as the other scenes. 00 is the cover. Projects are grouped by category, and the first of each group has a divider tab. Every spread uses the Meqaf binder grid |
+| Art | `#art` | Gallery wall. 00 is the whole room. Two prints in wood frames, a block tower, and a ribbed pendant, each with a wall label |
 
 `#exhibition` opens Art and the address bar becomes `#art`.
 
 The current page name sits at the top centre. The previous page name sits at the bottom left, and the next page name at the bottom right. Art’s next page is About, and About’s previous page is Art. The counter and arrows stay at the bottom centre. They step through the items of the scene you are in. Arrow keys and a horizontal swipe do the same. Space is a shortcut for the next item.
 
-On the binder, 00 is the closed cover: a paper page, her name, and the word Design, with a metal 3-ring spine on the left. The projects are grouped so that every project of one category sits together. Only the first project of a category has a divider tab, and the tab is labelled with that category. The projects that follow it are plain pages of the same section, with no tab of their own. 01 and onward follow that grouped order. The arrows, the counter, and a click on a tab open the binder in one shot. A tab opens the first project of its category. The page turns around the rings, and the camera eases to the spread. Every page of a category uses that category’s tab colour. The tab labels read left to right in one shared size. A two-word label wraps onto two lines, and the tab only sticks out a short way past the page. The binder sits on the same bone ground as the other scenes. The left page carries the project title and the cover picture. The right page carries her description, when she published one, and the rest of the project: the other stills, film strips, or the site. A category tab stays on the right while any project in that category is open, and moves to the left only after the whole category has been passed. On the cover, every tab is on the right. A phone frames both pages of an open spread. The closed cover stays a single page. A project she published as video plays those clips muted and looped only while that project is open, and shows a poster frame otherwise. The website project shows a scrolling capture of the URL she published, with a Visit site tag that opens that URL in a new tab. The light is soft, and the page has a slight tilt.
+On the binder, 00 is the closed cover: a paper page, her name, and the word Design, with a metal 3-ring spine on the left. The projects are grouped so that every project of one category sits together. Only the first project of a category has a divider tab, and the tab is labelled with that category. The projects that follow it are plain pages of the same section, with no tab of their own. 01 and onward follow that grouped order. The arrows, the counter, and a click on a tab open the binder in one shot. A tab opens the first project of its category. The page turns around the rings, and the camera eases to the spread. The divider tab uses that category’s colour. The tab labels read left to right in one shared size. A two-word label wraps onto two lines, and the tab only sticks out a short way past the page. The binder sits on the same bone ground as the other scenes. Every project spread follows the Meqaf binder: a top band with a logo tile, a small label, the title and her line, then three tiles and a square plus a wide tile on the left; a heading, her caption, colour swatches where she printed them, and a two-by-two grid on the right. Tiles are rounded, with a soft shadow and a narrow gutter. The sheet uses that project’s brand colour when one is known, and otherwise the category colour. A spaced-caps running header and a thin rule sit at the top and bottom of each page. A project she published as video plays those clips muted and looped inside their tiles only while that project is open, and shows a poster frame otherwise. The website project shows a scrolling capture in one tile, with a Visit site tag that opens the URL she published. A category tab stays on the right while any project in that category is open, and moves to the left only after the whole category has been passed. On the cover, every tab is on the right. A phone frames both pages of an open spread. The closed cover stays a single page. The light is soft, and the page has a slight tilt.
 
 Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. Each painting hangs in a carved wood frame under a warm spotlight, with the picture set into the frame. The label is printed in the room, not on a card: the artist, then place and life years only when those were given, then the italic title with the year, then the medium, then a short description. Any of those lines is left off when the piece has no data for it. On a wide screen the painting’s label sits beside the work. On a tall screen it sits below the painting. The sculpture’s label sits beside the plinth, clear of the form.
 
@@ -43,8 +43,8 @@ js/projects.js        all editable text and image lists
 js/vendor/            three.js r169, vendored
 assets/fonts/         Cormorant Garamond and Inter
 assets/img/           favicon and the portrait placeholder
-assets/projects/      her work, one folder per project
-assets/samples/       sample vessels and paintings, not her work
+assets/projects/      published design stills and clips
+assets/hanouf/        her art, pottery models, and later design files
 ```
 
 Paths are relative, so the site works from a local server or under `/AlHanouf_Portfolio/` on GitHub Pages.
@@ -55,23 +55,17 @@ Everything you would change is in `js/projects.js`.
 
 **About.** `ARTIST` holds her name, the welcome line, the portrait path, and the links. The page shows LinkedIn and WhatsApp only. The portrait on the site is a placeholder drawing. Replace `assets/img/portrait.svg` with a photograph and update `portrait` and `portraitNote`. There is no portrait on the original portfolio.
 
-**Design.** Each object in `DESIGN` is one project in the binder. `category` is a word copied from that project’s title or text. Projects that share a category are shown together, and only the first of them grows a divider tab labelled with that word. The first still is the cover picture on the left page of that project. `title`, `text`, and `year` are copied from her site; leave `text` or `year` out when she did not publish them. The title is set on the left page. `text` and `year` are set on the right page, and nowhere else. `images` is a list of stills under `assets/projects/<slug>/`. When `items` is set, those follow the cover on the right page: an `image` is another still, a `video` is a local mp4 with a poster frame (muted, looping, playing only while that project is open), and a `website` is a tall page. The website capture is a screenshot of the URL she published (`links`), saved as `assets/projects/website-design/page.webp`. The Visit site tag uses that same URL. `source` is the project page on the original portfolio.
+**Design.** Each object in `DESIGN` is one project in the binder. `category` is a word copied from that project’s title or text. Projects that share a category are shown together, and only the first of them grows a divider tab labelled with that word. `slots` fills the ten Meqaf tiles in order: logo, three across, square, wide, then four application tiles. A `video` is a local mp4 with a poster frame. A `website` tile is the capture of the URL she published. `sheet` is a brand colour taken from the work; without it the page keeps the category colour. `swatches` are printed colours, with a name only when the work prints one. `title`, `text`, and `year` are copied from her site or from text on the piece. Leave them out when she did not publish them.
 
-**Ceramics.** The array already holds three sample vessels (bottle, bowl, tall vase) so the wheel can be tested. Replace them with her pieces, or set `CERAMICS` to `[]` to clear the samples. Each object looks like:
+**Ceramics.** Each object is one piece on the wheel. `shape` picks the clay thrown before the model appears: `2` a bottle, `3` an open bowl, `4` a tall vase. `model` is an OBJ. While the wheel is throwing, and until it has completely stopped, the piece stays clay. After it stops, the clay fades out and the model fades in. The two pieces have no published title, so the label is Untitled.
 
-```js
-{ title: '', text: '', year: '', images: ['assets/projects/example/01.webp'], shape: 2 }
-```
-
-`shape` picks the clay: `0` the word hello, `2` a bottle, `3` an open bowl, `4` a tall vase. Use the closest profile to the piece. Only include year or text when you have them. While the wheel is throwing, and until it has completely stopped, the piece stays clay. After it stops, the clay fades into the first image over about a second. A piece with no image stays clay.
-
-**Art.** The `EXHIBITION` array holds three sample paintings and one sample sculpture. Replace them with her pieces, or set `EXHIBITION` to `[]` to clear the samples. Each object looks like:
+**Art.** Each object looks like:
 
 ```js
 { kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
 ```
 
-`kind` is `painting` (on the wall, in a wood frame) or `sculpture` (on a plinth). A sculpture with no `image` is drawn as a simple generated form. Omit any field she did not give. The wall label prints only the fields that are present. `place` and `life` are optional and are not invented.
+`kind` is `painting` (on the wall, in a wood frame) or `sculpture` (on its own plinth). `model` `tower` is the stacked-block sculpture and `pendant` is the ribbed silver piece on a small stand. Omit any field she did not give. The wall label prints only the fields that are present. `place` and `life` are optional and are not invented.
 
 ## Run locally
 

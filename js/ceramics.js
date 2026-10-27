@@ -11,6 +11,72 @@ function spanFor(shape) {
   return 1.52;
 }
 
+function parseOBJ(text) {
+  const positions = [];
+  const indices = [];
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.charCodeAt(0) === 118 && line.charCodeAt(1) === 32) {
+      const p = line.split(' ');
+      positions.push(+p[1], +p[2], +p[3]);
+    } else if (line.charCodeAt(0) === 102 && line.charCodeAt(1) === 32) {
+      const parts = line.split(' ');
+      const idx = [];
+      for (let k = 1; k < parts.length; k += 1) {
+        if (parts[k]) idx.push(parseInt(parts[k], 10) - 1);
+      }
+      for (let k = 1; k < idx.length - 1; k += 1) indices.push(idx[0], idx[k], idx[k + 1]);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  return geo;
+}
+
+function fitGeo(geo, height) {
+  geo.computeBoundingBox();
+  const box = geo.boundingBox;
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  geo.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+  const scale = height / Math.max(size.y, 0.0001);
+  geo.scale(scale, scale, scale);
+  geo.computeBoundingBox();
+  const fitted = geo.boundingBox;
+  const half = Math.max(fitted.max.x, -fitted.min.x, fitted.max.z, -fitted.min.z);
+  if (half > 0.9) {
+    const k = 0.9 / half;
+    geo.scale(k, k, k);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+async function loadModel(item) {
+  if (!item || !item.model) return null;
+  try {
+    const res = await fetch(encodeURI(item.model));
+    if (!res.ok) return null;
+    const geo = fitGeo(parseOBJ(await res.text()), item.height || 1);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: item.color || '#c4b09a',
+      roughness: item.roughness == null ? 0.72 : item.roughness,
+      metalness: item.metalness == null ? 0.02 : item.metalness,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    }));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.visible = false;
+    return mesh;
+  } catch (err) {
+    return null;
+  }
+}
+
 function loadPhoto(url, renderer) {
   return new Promise((resolve) => {
     if (!url) { resolve(null); return; }
@@ -206,6 +272,8 @@ export async function createCeramics(renderer, { reduce, projects }) {
 
   const list = projects.length ? projects : [{ shape: 2, title: '', text: '', images: [], rest: true }];
   const photos = await Promise.all(list.map((item) => loadPhoto(item.images && item.images[0], renderer)));
+  const models = await Promise.all(list.map((item) => loadModel(item)));
+  models.forEach((mesh) => { if (mesh) wheel.add(mesh); });
   const blank = new THREE.DataTexture(new Uint8Array([180, 100, 70, 255]), 1, 1);
   blank.colorSpace = THREE.SRGBColorSpace;
   blank.needsUpdate = true;
@@ -304,7 +372,17 @@ export async function createCeramics(renderer, { reduce, projects }) {
     else if (reduce) fade = 1;
     else fade = Math.min(1, fade + dt);
     const blend = fade * fade * (3 - 2 * fade);
-    U.uFinish.value = blend;
+    const revealing = stopped && !!models[cur];
+    U.uFinish.value = revealing ? 0 : blend;
+    U.uAlpha.value = revealing ? 1 - blend : 1;
+    clay.visible = U.uAlpha.value > 0.03;
+    clay.material.depthWrite = U.uAlpha.value > 0.92;
+    models.forEach((mesh, i) => {
+      if (!mesh) return;
+      const on = revealing && i === cur && blend > 0.02;
+      mesh.visible = on;
+      mesh.material.opacity = on ? blend : 0;
+    });
     U.uSpin.value = spin;
     U.uTime.value = now / 1000;
     camObj.copy(camera.position);

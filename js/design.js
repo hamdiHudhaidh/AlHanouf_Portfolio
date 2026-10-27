@@ -6,8 +6,9 @@ import { ARTIST } from './projects.js';
 // 00 is the closed cover. Each later number is one project, in category
 // order. Only the first project of a category has a divider tab, labelled
 // with that category in one horizontal size. A two-word label wraps so the
-// tab only sticks out a short way past the page. Every page in that category
-// uses the tab colour. The page turns around the rings.
+// tab only sticks out a short way past the page. Every spread uses the Meqaf
+// binder grid. A sheet uses the project's brand colour when one is known.
+// The page turns around the rings.
 
 const TEX_W = 720;
 const TEX_H = 992;
@@ -208,33 +209,34 @@ function punch(ctx, side) {
   ctx.restore();
 }
 
-function drawRules(ctx, header, footer, holes) {
+function drawRules(ctx, header, footer, holes, ink) {
   const leftX = holes === 'left' ? 98 : 42;
   const rightX = holes === 'right' ? TEX_W - 98 : TEX_W - 42;
+  const light = ink !== INK;
   ctx.save();
-  ctx.strokeStyle = 'rgba(22,18,14,0.72)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = light ? 'rgba(246,241,230,0.72)' : 'rgba(22,18,14,0.55)';
+  ctx.lineWidth = 1.25;
   ctx.beginPath();
   ctx.moveTo(leftX, 58);
   ctx.lineTo(rightX, 58);
   ctx.moveTo(leftX, TEX_H - 58);
   ctx.lineTo(rightX, TEX_H - 58);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(29,27,25,0.88)';
-  ctx.font = '600 18px Inter';
+  ctx.fillStyle = ink;
+  ctx.font = '600 14px Inter, "Noto Naskh Arabic", sans-serif';
   ctx.textBaseline = 'middle';
-  const place = (labels, y) => {
-    fillTracked(ctx, labels[0] || '', leftX, y, 'left', 1.6);
-    fillTracked(ctx, labels[1] || '', TEX_W / 2, y, 'center', 1.6);
-    fillTracked(ctx, labels[2] || '', rightX, y, 'right', 1.6);
+  const place = (labels, y, tracking) => {
+    fillTracked(ctx, labels[0] || '', leftX, y, 'left', tracking);
+    fillTracked(ctx, labels[1] || '', TEX_W / 2, y, 'center', tracking);
+    fillTracked(ctx, labels[2] || '', rightX, y, 'right', tracking);
   };
-  place(header, 34);
-  ctx.font = '500 16px Inter';
-  place(footer, TEX_H - 34);
+  place(header, 34, 2.8);
+  ctx.font = '500 13px Inter, "Noto Naskh Arabic", sans-serif';
+  place(footer, TEX_H - 34, 2.2);
   ctx.restore();
 }
 
-function drawSheet(ctx, { fill, header, footer, holes }) {
+function drawSheet(ctx, { fill, header, footer, holes, ink }) {
   ctx.clearRect(0, 0, TEX_W, TEX_H);
   ctx.fillStyle = fill;
   ctx.fillRect(0, 0, TEX_W, TEX_H);
@@ -250,13 +252,128 @@ function drawSheet(ctx, { fill, header, footer, holes }) {
   grad.addColorStop(1, 'rgba(20,16,12,0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, TEX_W, TEX_H);
-  drawRules(ctx, header, footer, holes === 'right' ? 'right' : 'left');
+  drawRules(ctx, header, footer, holes === 'right' ? 'right' : 'left', ink || INK);
   punch(ctx, holes === 'right' ? 'right' : 'left');
 }
 
 function contentBox(holes) {
   if (holes === 'right') return { x: 42, w: TEX_W - 42 - 108 };
   return { x: 108, w: TEX_W - 108 - 42 };
+}
+
+function sheetInk(fill) {
+  return luminance(fill) > 0.68 ? INK : '#f6f1e6';
+}
+
+function traceRound(ctx, x, y, w, h, r) {
+  const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+function coverImage(ctx, img, x, y, w, h) {
+  if (!img || w < 2 || h < 2) return;
+  const iw = img.naturalWidth || img.videoWidth || img.width;
+  const ih = img.naturalHeight || img.videoHeight || img.height || 1;
+  if (!iw || !ih) return;
+  const ir = iw / ih;
+  const tr = w / h;
+  let dw;
+  let dh;
+  if (ir > tr) {
+    dh = h;
+    dw = h * ir;
+  } else {
+    dw = w;
+    dh = w / ir;
+  }
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
+function drawTile(ctx, slot, x, y, w, h) {
+  if (w < 4 || h < 4) return;
+  const r = Math.max(10, Math.min(18, Math.round(Math.min(w, h) * 0.08)));
+  ctx.save();
+  ctx.shadowColor = 'rgba(20,16,12,0.30)';
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = 'rgba(255,252,246,0.20)';
+  traceRound(ctx, x, y, w, h, r);
+  ctx.fill();
+  ctx.restore();
+  const frame = slot && (slot.image || slot.poster);
+  if (frame) {
+    ctx.save();
+    traceRound(ctx, x, y, w, h, r);
+    ctx.clip();
+    coverImage(ctx, frame, x, y, w, h);
+    ctx.restore();
+  }
+  if (slot) slot.rect = { x, y, w, h, r };
+}
+
+function paintLive(ctx, slot) {
+  if (!slot || !slot.rect) return;
+  const { x, y, w, h, r } = slot.rect;
+  ctx.save();
+  traceRound(ctx, x, y, w, h, r || 12);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,252,246,0.16)';
+  ctx.fillRect(x, y, w, h);
+  if (slot.kind === 'website' && slot.image) {
+    const image = slot.image;
+    const sw = image.naturalWidth || image.width;
+    const shFull = image.naturalHeight || image.height;
+    const scale = w / sw;
+    const srcH = Math.min(shFull, h / scale);
+    const maxScroll = Math.max(1, shFull - srcH);
+    const sy = slot.scroll == null ? 0 : slot.scroll % maxScroll;
+    ctx.drawImage(image, 0, sy, sw, srcH, x, y, w, h);
+  } else if (slot.kind === 'video') {
+    const frame = slot.video && slot.video.readyState >= 2 ? slot.video : (slot.poster || slot.image);
+    if (frame) coverImage(ctx, frame, x, y, w, h);
+  }
+  ctx.restore();
+}
+
+function drawSwatches(ctx, swatches, x, y, w, ink) {
+  const n = swatches.length;
+  if (!n) return 0;
+  const gap = Math.max(10, Math.round(w / 40));
+  const sw = Math.min(72, Math.floor((w - gap * (n - 1)) / n));
+  const named = swatches.some((s) => s.name);
+  swatches.forEach((swatch, i) => {
+    const sx = x + i * (sw + gap);
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,16,12,0.24)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = swatch.hex;
+    traceRound(ctx, sx, y, sw, sw, 10);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(20,16,12,0.28)';
+    ctx.lineWidth = 1;
+    traceRound(ctx, sx, y, sw, sw, 10);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    let ly = y + sw + 6;
+    if (swatch.name) {
+      ctx.font = '600 12px Inter, "Noto Naskh Arabic", sans-serif';
+      ctx.fillText(swatch.name, sx, ly);
+      ly += 15;
+    }
+    ctx.font = '500 11px Inter, sans-serif';
+    ctx.fillText(swatch.hex, sx, ly);
+  });
+  return sw + (named ? 40 : 24);
 }
 
 function drawFilm(ctx, rect, frame) {
@@ -275,12 +392,17 @@ function drawFilm(ctx, rect, frame) {
 }
 
 function drawVisitTag(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = INK;
-  ctx.fillRect(x, y, w, h);
+  traceRound(ctx, x, y, w, h, 8);
+  ctx.fill();
   ctx.fillStyle = CREAM;
-  ctx.font = '600 20px Inter';
+  const size = Math.max(11, Math.min(15, Math.floor(h * 0.42)));
+  ctx.font = `600 ${size}px Inter`;
   ctx.textBaseline = 'middle';
-  fillTracked(ctx, 'VISIT SITE', x + w / 2, y + h / 2, 'center', 1.8);
+  fillTracked(ctx, 'VISIT SITE', x + w / 2, y + h / 2, 'center', 1.1);
+  ctx.restore();
 }
 
 function layoutStills(ctx, stills, x, y, w, h) {
@@ -426,9 +548,9 @@ export async function createDesign(renderer, { reduce, projects }) {
   const sources = new Set();
   projects.forEach((project) => {
     (project.images || []).forEach((src) => sources.add(src));
-    (project.items || []).forEach((item) => {
-      if (item.src) sources.add(item.src);
-      if (item.poster) sources.add(item.poster);
+    (project.slots || project.items || []).forEach((item) => {
+      if (item && item.src) sources.add(item.src);
+      if (item && item.poster) sources.add(item.poster);
     });
   });
   const images = new Map();
@@ -436,50 +558,54 @@ export async function createDesign(renderer, { reduce, projects }) {
     images.set(src, await loadImage(src));
   }));
 
+  function mediaSlot(item) {
+    if (!item) return null;
+    if (item.kind === 'video') {
+      return {
+        kind: 'video',
+        video: makeVideo(item.src),
+        poster: images.get(item.poster) || null,
+        image: images.get(item.poster) || null,
+      };
+    }
+    if (item.kind === 'website') {
+      return { kind: 'website', image: images.get(item.src) || null, href: item.href || '', scroll: 0 };
+    }
+    const image = images.get(item.src) || null;
+    if (!image) return null;
+    return { kind: 'image', image };
+  }
+
   const ordered = groupByCategory(projects);
   const pages = ordered.map((project, index) => {
     const num = String(index + 1).padStart(2, '0');
-    const color = SECTION_COLORS[0];
-    const fill = CREAM;
-    const seen = new Set();
-    const coverSrc = project.images?.[0];
-    if (coverSrc) seen.add(coverSrc);
-    const stills = [];
-    (project.images || []).slice(1).forEach((src) => {
-      if (seen.has(src)) return;
-      seen.add(src);
-      if (images.get(src)) stills.push(images.get(src));
-    });
-    const videos = [];
-    let website = null;
-    (project.items || []).forEach((item) => {
-      if (item.kind === 'image') {
-        if (seen.has(item.src)) return;
-        seen.add(item.src);
-        if (images.get(item.src)) stills.push(images.get(item.src));
-      } else if (item.kind === 'video') {
-        videos.push({ video: makeVideo(item.src), poster: images.get(item.poster) || null });
-      } else if (item.kind === 'website' && !website) {
-        website = { image: images.get(item.src) || null, href: item.href || '' };
-      }
-    });
+    const raw = project.slots || [];
+    const slots = Array.from({ length: 10 }, (_, i) => mediaSlot(raw[i]));
+    const videos = slots.filter((slot) => slot && slot.kind === 'video');
+    const website = slots.find((slot) => slot && slot.kind === 'website') || null;
+    const leftDyn = slots.slice(0, 6).some((slot) => slot && slot.kind === 'video');
+    const rightDyn = slots.slice(6).some((slot) => slot && (slot.kind === 'video' || slot.kind === 'website'));
     return {
       project,
       index,
       num,
-      color,
-      fill,
+      color: SECTION_COLORS[0],
+      fill: CREAM,
       title: project.title || '',
       text: project.text || '',
+      label: project.label || project.category || '',
       year: project.year || '',
-      cover: images.get(coverSrc) || null,
-      stills,
+      rightTitle: project.rightTitle || project.title || '',
+      rightText: project.rightText != null ? project.rightText : (project.text || ''),
+      swatches: project.swatches || [],
+      slots,
       videos,
       website,
       scroll: 0,
-      films: [],
       visitRect: null,
-      dynamic: videos.length > 0 || !!website,
+      leftDyn,
+      rightDyn,
+      dynamic: leftDyn || rightDyn,
       section: 0,
     };
   });
@@ -499,163 +625,175 @@ export async function createDesign(renderer, { reduce, projects }) {
     const section = sections[sections.length - 1];
     page.section = sections.length - 1;
     page.color = section.color;
-    page.fill = mixHex(section.color, '#f6f3ec', 0.12);
+    page.fill = page.project.sheet || mixHex(section.color, '#f6f3ec', 0.12);
   });
 
   const nameFooter = coverFooter();
 
-  function header(num) {
-    return ['DESIGN', 'PORTFOLIO', num];
+  function runningHeader(page, holes) {
+    if (!page) return ['DESIGN', 'PORTFOLIO', '00'];
+    if (holes === 'right') return [String(page.title || '').toUpperCase(), '', ''];
+    const bits = [page.label, page.year].filter(Boolean).join('  ').toUpperCase();
+    return [bits, '', ''];
+  }
+
+  function paintLeft(ctx, page, box, ink) {
+    const gap = Math.max(12, Math.round(box.w / 40));
+    const top = 76;
+    const bottom = TEX_H - 72;
+    const logoW = Math.round(box.w * 0.4);
+    const bandH = Math.min(logoW, Math.round((bottom - top) * 0.34));
+    drawTile(ctx, page.slots[0], box.x, top, logoW, bandH);
+    const tx = box.x + logoW + gap;
+    const tw = Math.max(40, box.x + box.w - tx);
+    ctx.fillStyle = ink;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    let ty = top + 2;
+    if (page.label) {
+      ctx.font = '600 15px Inter, "Noto Naskh Arabic", sans-serif';
+      fillTracked(ctx, String(page.label).toUpperCase(), tx, ty + 10, 'left', 2.1);
+      ty += 32;
+    }
+    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
+    let size = 52;
+    ctx.font = `800 ${size}px ${face}`;
+    let lines = wrapLines(ctx, String(page.title || '').toUpperCase(), tw);
+    while (size > 28 && lines.length > 2) {
+      size -= 2;
+      ctx.font = `800 ${size}px ${face}`;
+      lines = wrapLines(ctx, String(page.title || '').toUpperCase(), tw);
+    }
+    lines.slice(0, 2).forEach((line) => {
+      ctx.fillText(line, tx, ty);
+      ty += size * 0.98;
+    });
+    ty += 10;
+    if (page.text) {
+      ctx.font = `400 18px ${face}`;
+      wrapLines(ctx, page.text, tw).slice(0, 4).forEach((line) => {
+        ctx.fillText(line, tx, ty);
+        ty += 24;
+      });
+    }
+    const rowsTop = top + bandH + gap;
+    const rowH = Math.floor((bottom - rowsTop - gap) / 2);
+    const trioW = Math.floor((box.w - gap * 2) / 3);
+    for (let i = 0; i < 3; i += 1) {
+      drawTile(ctx, page.slots[1 + i], box.x + i * (trioW + gap), rowsTop, trioW, rowH);
+    }
+    const square = Math.min(rowH, Math.floor(box.w * 0.42));
+    const wide = box.w - square - gap;
+    const by = rowsTop + rowH + gap;
+    drawTile(ctx, page.slots[4], box.x, by, square, rowH);
+    drawTile(ctx, page.slots[5], box.x + square + gap, by, wide, rowH);
+  }
+
+  function paintRight(ctx, page, box, ink) {
+    const gap = Math.max(12, Math.round(box.w / 40));
+    const top = 76;
+    const bottom = TEX_H - 72;
+    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
+    ctx.fillStyle = ink;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    let y = top;
+    if (page.rightTitle) {
+      let size = 40;
+      ctx.font = `800 ${size}px ${face}`;
+      let lines = wrapLines(ctx, page.rightTitle, box.w);
+      while (size > 26 && lines.length > 2) {
+        size -= 2;
+        ctx.font = `800 ${size}px ${face}`;
+        lines = wrapLines(ctx, page.rightTitle, box.w);
+      }
+      lines.slice(0, 2).forEach((line) => {
+        ctx.fillText(line, box.x, y);
+        y += size * 1.05;
+      });
+      y += 8;
+    }
+    if (page.rightText) {
+      ctx.font = `400 18px ${face}`;
+      wrapLines(ctx, page.rightText, box.w).slice(0, 3).forEach((line) => {
+        ctx.fillText(line, box.x, y);
+        y += 24;
+      });
+      y += 12;
+    }
+    if (page.swatches.length) {
+      y += drawSwatches(ctx, page.swatches, box.x, y, box.w, ink) + 14;
+    }
+    const cellW = Math.floor((box.w - gap) / 2);
+    const cellH = Math.max(40, Math.floor((bottom - y - gap) / 2));
+    page.visitRect = null;
+    for (let i = 0; i < 4; i += 1) {
+      const slot = page.slots[6 + i];
+      const x = box.x + (i % 2) * (cellW + gap);
+      const yy = y + Math.floor(i / 2) * (cellH + gap);
+      drawTile(ctx, slot, x, yy, cellW, cellH);
+      if (slot && slot.kind === 'website') slot.scroll = page.scroll;
+      if (slot && slot.kind === 'website' && slot.href) {
+        const bw = Math.min(168, cellW - 20);
+        const bh = 32;
+        page.visitRect = { x: x + 10, y: yy + cellH - bh - 10, w: bw, h: bh };
+        drawVisitTag(ctx, page.visitRect.x, page.visitRect.y, bw, bh);
+      }
+    }
   }
 
   function paintBase(canvas, page, holes) {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    const num = page ? page.num : '00';
     const fill = page ? page.fill : CREAM;
+    const ink = page ? sheetInk(fill) : INK;
     const footer = page ? footerParts(page.title, page.year, page.num) : nameFooter;
-    drawSheet(ctx, { fill, header: header(num), footer, holes });
-    const box = contentBox(holes);
-    const top = 86;
-    const bottom = TEX_H - 78;
+    drawSheet(ctx, { fill, header: runningHeader(page, holes), footer, holes, ink });
     if (!page) {
       ctx.fillStyle = INK;
       ctx.textBaseline = 'middle';
       ctx.font = '500 24px Inter';
       fillTracked(ctx, String(ARTIST.name || '').toUpperCase(), TEX_W / 2, TEX_H / 2 - 86, 'center', 1.5);
-      ctx.font = '800 104px Inter';
       ctx.textAlign = 'center';
-      const word = 'Design';
       let size = 104;
       ctx.font = `800 ${size}px Inter`;
-      while (size > 64 && ctx.measureText(word).width > TEX_W - 150) {
+      while (size > 64 && ctx.measureText('Design').width > TEX_W - 150) {
         size -= 4;
         ctx.font = `800 ${size}px Inter`;
       }
-      ctx.fillText(word, TEX_W / 2, TEX_H / 2 + 36);
+      ctx.fillText('Design', TEX_W / 2, TEX_H / 2 + 36);
       ctx.textAlign = 'left';
       return;
     }
-    if (holes === 'right') {
-      ctx.fillStyle = INK;
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-      let size = 84;
-      ctx.font = `800 ${size}px Inter`;
-      let lines = wrapLines(ctx, page.title.toUpperCase(), box.w);
-      while (size > 42 && lines.length > 3) {
-        size -= 2;
-        ctx.font = `800 ${size}px Inter`;
-        lines = wrapLines(ctx, page.title.toUpperCase(), box.w);
-      }
-      let y = top;
-      lines.forEach((line) => {
-        ctx.fillText(line, box.x, y);
-        y += size * 0.94;
-      });
-      y += 22;
-      drawContain(ctx, page.cover, box.x, y, box.w, bottom - y);
-      return;
-    }
-    ctx.fillStyle = INK;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    let y = top;
-    const mediaCount = page.stills.length + page.videos.length + (page.website ? 1 : 0);
-    if (page.text && mediaCount === 0) {
-      let size = 48;
-      ctx.font = `400 ${size}px Inter`;
-      let lines = wrapLines(ctx, page.text, box.w * 0.92);
-      while (size > 30 && lines.length > 8) {
-        size -= 2;
-        ctx.font = `400 ${size}px Inter`;
-        lines = wrapLines(ctx, page.text, box.w * 0.92);
-      }
-      const lh = size * 1.35;
-      const block = lines.length * lh;
-      y = top + Math.max(0, (bottom - top - block) / 2);
-      lines.forEach((line) => {
-        ctx.fillText(line, box.x, y);
-        y += lh;
-      });
-      return;
-    }
-    if (page.text) {
-      ctx.font = '400 32px Inter';
-      const lines = wrapLines(ctx, page.text, box.w);
-      lines.forEach((line) => {
-        ctx.fillText(line, box.x, y);
-        y += 42;
-      });
-      y += 16;
-    }
-    const avail = bottom - y;
-    if (page.website) {
-      const filmH = page.videos.length ? Math.min(200, avail * 0.28) : 0;
-      const visitH = page.website.href ? 56 : 0;
-      const webH = Math.max(80, avail - filmH - visitH - (filmH ? 14 : 0) - (visitH ? 12 : 0));
-      page.webRect = { x: box.x, y, w: box.w, h: webH };
-      y += webH + 12;
-      if (page.website.href) {
-        const bw = Math.min(280, box.w);
-        page.visitRect = { x: box.x, y, w: bw, h: 52 };
-        drawVisitTag(ctx, box.x, y, bw, 52);
-        y += 52 + 16;
-      }
-      page.films = filmRects(page.videos, box.x, y, box.w, Math.max(0, bottom - y));
-      page.films.forEach((film) => drawFilm(ctx, film.rect, film.poster));
-      return;
-    }
-    if (page.videos.length && page.stills.length) {
-      const filmH = Math.min(230, avail * 0.4);
-      layoutStills(ctx, page.stills, box.x, y, box.w, avail - filmH - 12);
-      page.films = filmRects(page.videos, box.x, y + avail - filmH, box.w, filmH);
-      page.films.forEach((film) => drawFilm(ctx, film.rect, film.poster));
-      return;
-    }
-    if (page.videos.length) {
-      page.films = filmRects(page.videos, box.x, y, box.w, avail);
-      page.films.forEach((film) => drawFilm(ctx, film.rect, film.poster));
-      return;
-    }
-    layoutStills(ctx, page.stills, box.x, y, box.w, avail);
-  }
-
-  function drawWebsite(ctx, page) {
-    const image = page.website && page.website.image;
-    const rect = page.webRect;
-    if (!image || !rect) return;
-    const { x, y, w, h } = rect;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    ctx.fillStyle = '#f7f4ee';
-    ctx.fillRect(x, y, w, h);
-    const sw = image.naturalWidth || image.width;
-    const shFull = image.naturalHeight || image.height;
-    const scale = w / sw;
-    const srcH = Math.min(shFull, h / scale);
-    const maxScroll = Math.max(1, shFull - srcH);
-    const sy = reduce ? 0 : page.scroll % maxScroll;
-    ctx.drawImage(image, 0, sy, sw, srcH, x, y, w, h);
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(22,18,14,0.4)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    const box = contentBox(holes);
+    if (holes === 'right') paintLeft(ctx, page, box, ink);
+    else paintRight(ctx, page, box, ink);
   }
 
   function paintDynamic(page) {
     if (!page || !page.dynamic) return;
-    const ctx = page.live.getContext('2d');
-    ctx.drawImage(page.base, 0, 0);
-    if (page.website) drawWebsite(ctx, page);
-    page.films.forEach((film) => {
-      const frame = film.video.readyState >= 2 ? film.video : film.poster;
-      drawFilm(ctx, film.rect, frame);
-    });
-    page.rightTex.needsUpdate = true;
+    if (page.website) page.website.scroll = reduce ? 0 : page.scroll;
+    if (page.leftDyn && page.leftLive) {
+      const ctx = page.leftLive.getContext('2d');
+      ctx.drawImage(page.left, 0, 0);
+      page.slots.slice(0, 6).forEach((slot) => {
+        if (slot && slot.kind === 'video') paintLive(ctx, slot);
+      });
+      if (page.leftTex) page.leftTex.needsUpdate = true;
+    }
+    if (page.rightDyn && page.live) {
+      const ctx = page.live.getContext('2d');
+      ctx.drawImage(page.base, 0, 0);
+      page.slots.slice(6).forEach((slot) => {
+        if (slot && (slot.kind === 'video' || slot.kind === 'website')) paintLive(ctx, slot);
+      });
+      if (page.visitRect) {
+        const rect = page.visitRect;
+        drawVisitTag(ctx, rect.x, rect.y, rect.w, rect.h);
+      }
+      if (page.rightTex) page.rightTex.needsUpdate = true;
+    }
   }
 
   const coverCanvas = document.createElement('canvas');
@@ -672,12 +810,17 @@ export async function createDesign(renderer, { reduce, projects }) {
     page.base.width = TEX_W;
     page.base.height = TEX_H;
     paintBase(page.base, page, 'left');
-    if (page.dynamic) {
+    if (page.leftDyn) {
+      page.leftLive = document.createElement('canvas');
+      page.leftLive.width = TEX_W;
+      page.leftLive.height = TEX_H;
+      page.leftLive.getContext('2d').drawImage(page.left, 0, 0);
+    }
+    if (page.rightDyn) {
       page.live = document.createElement('canvas');
       page.live.width = TEX_W;
       page.live.height = TEX_H;
       page.live.getContext('2d').drawImage(page.base, 0, 0);
-      if (page.website) drawWebsite(page.live.getContext('2d'), page);
     }
   });
 
@@ -716,8 +859,8 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   const coverTex = makeTexture(coverCanvas, false);
   pages.forEach((page) => {
-    page.leftTex = makeTexture(page.left, false);
-    page.rightTex = makeTexture(page.dynamic ? page.live : page.base, page.dynamic);
+    page.leftTex = makeTexture(page.leftDyn ? page.leftLive : page.left, page.leftDyn);
+    page.rightTex = makeTexture(page.rightDyn ? page.live : page.base, page.rightDyn);
     paintDynamic(page);
   });
 
@@ -1223,7 +1366,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       }
     }
     const active = slot > 0 ? pages[slot - 1] : null;
-    if (active && active.website && !reduce && !suspended) active.scroll += dt * 260;
+    if (active && active.website && !reduce && !suspended) active.scroll += dt * 42;
     if (active && active.dynamic) paintDynamic(active);
     if (turning && turn && turn.from > 0) {
       const previous = pages[turn.from - 1];

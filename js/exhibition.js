@@ -6,26 +6,97 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 // The label is printed in the room. A line is omitted when the piece has no
 // data for it. The sculpture label sits beside the plinth.
 
-function sampleSculpture(x) {
-  const pts = [];
-  const n = 32;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    const y = t * 0.78;
-    let r = 0.07 + 0.05 * Math.sin(t * Math.PI);
-    r += 0.16 * Math.exp(-((t - 0.28) ** 2) / 0.012);
-    r += 0.1 * Math.exp(-((t - 0.62) ** 2) / 0.02);
-    if (t > 0.86) r = 0.045 + (1 - t) * 0.55;
-    pts.push(new THREE.Vector2(Math.max(0.03, r), y));
-  }
-  const mesh = new THREE.Mesh(
-    new THREE.LatheGeometry(pts, 40),
-    new THREE.MeshStandardMaterial({ color: 0xa8603f, roughness: 0.42, metalness: 0.04 }),
+function woodBlock(hex) {
+  return new THREE.MeshStandardMaterial({ color: hex, roughness: 0.66, metalness: 0.02 });
+}
+
+function makeTower(x) {
+  const group = new THREE.Group();
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.92, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0xe8e1d6, roughness: 0.4 }),
   );
-  mesh.position.set(x, 0.92, 1.15);
-  mesh.scale.setScalar(1.2);
-  mesh.castShadow = true;
-  return mesh;
+  plinth.position.set(0, 0.46, 0);
+  plinth.castShadow = true;
+  group.add(plinth);
+  const specs = [
+    [0.38, 0.12, 0.28, 0.06, 0.0, '#c6a36a'],
+    [0.32, 0.1, 0.26, 0.7, 0.02, '#b08a58'],
+    [0.3, 0.11, 0.22, -0.62, -0.02, '#d2b07a'],
+    [0.34, 0.09, 0.24, 0.28, 0.03, '#a67c4e'],
+    [0.22, 0.12, 0.22, 0.84, -0.015, '#e0c48c'],
+    [0.3, 0.1, 0.18, -0.4, 0.02, '#c4a06c'],
+    [0.26, 0.11, 0.26, 0.12, -0.03, '#8d6844'],
+    [0.28, 0.08, 0.16, -0.95, 0.01, '#d8bc88'],
+    [0.2, 0.12, 0.2, 0.48, 0.0, '#b99260'],
+    [0.24, 0.09, 0.22, -0.22, 0.02, '#cbb07a'],
+    [0.16, 0.1, 0.16, 0.66, -0.01, '#e6d0a2'],
+    [0.18, 0.08, 0.14, -0.5, 0.0, '#a88455'],
+    [0.14, 0.09, 0.12, 0.18, 0.01, '#ddc496'],
+  ];
+  let y = 0.92;
+  specs.forEach(([w, h, d, rot, ox, color]) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), woodBlock(color));
+    y += h / 2;
+    mesh.position.set(ox, y, 0);
+    mesh.rotation.y = rot;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    y += h / 2 - 0.003;
+  });
+  group.position.set(x, 0, 1.15);
+  return group;
+}
+
+function makePendant(x) {
+  const group = new THREE.Group();
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(0.46, 0.62, 0.46),
+    new THREE.MeshStandardMaterial({ color: 0xe8e1d6, roughness: 0.4 }),
+  );
+  plinth.position.set(0, 0.31, 0);
+  plinth.castShadow = true;
+  group.add(plinth);
+  const pts = [];
+  for (let i = 0; i <= 18; i += 1) {
+    const t = i / 18;
+    const y = t * 0.48;
+    let r = 0.09;
+    if (t < 0.32) r = 0.16 - t * 0.16;
+    else if (t < 0.68) r = 0.078;
+    else r = 0.08 + (t - 0.68) * 0.16;
+    pts.push(new THREE.Vector2(r, y));
+  }
+  const bust = new THREE.Mesh(
+    new THREE.LatheGeometry(pts, 28),
+    new THREE.MeshStandardMaterial({ color: 0x243044, roughness: 0.42, metalness: 0.16 }),
+  );
+  bust.position.set(0, 0.62, 0);
+  bust.castShadow = true;
+  group.add(bust);
+  const profile = [];
+  for (let i = 0; i <= 48; i += 1) {
+    const t = i / 48;
+    const y = (t - 0.5) * 0.22;
+    const body = Math.sin(t * Math.PI);
+    const rib = 1 + 0.22 * Math.sin(t * Math.PI * 11);
+    const r = 0.012 + 0.07 * body * rib;
+    profile.push(new THREE.Vector2(r, y));
+  }
+  const geo = new THREE.LatheGeometry(profile, 72);
+  geo.scale(1.05, 1, 0.38);
+  geo.computeVertexNormals();
+  const metal = new THREE.MeshStandardMaterial({ color: 0xd5dae2, metalness: 0.92, roughness: 0.28 });
+  const pendant = new THREE.Mesh(geo, metal);
+  pendant.position.set(0, 0.98, 0.16);
+  pendant.castShadow = true;
+  group.add(pendant);
+  const bail = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.0032, 8, 18), metal);
+  bail.position.set(0, 1.1, 0.16);
+  group.add(bail);
+  group.position.set(x, 0, 1.15);
+  return group;
 }
 
 function loadTex(url, renderer) {
@@ -285,7 +356,8 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const x = p.x;
     const spot = new THREE.SpotLight(0xffe0b0, 14, 9, 0.42, 0.45, 1);
     spot.position.set(x, 4.7, 2.5);
-    spot.target.position.set(x, 2.15, 0.08);
+    const focusY = p.model === 'pendant' ? 1.15 : p.model === 'tower' ? 1.8 : 2.15;
+    spot.target.position.set(x, focusY, p.kind === 'sculpture' ? 1.15 : 0.08);
     scene.add(spot, spot.target);
     const pool = new THREE.Mesh(
       new THREE.PlaneGeometry(3.1, 3.6),
@@ -300,23 +372,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     scene.add(pool);
 
     if (p.kind === 'sculpture') {
-      const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(0.7, 0.92, 0.7),
-        new THREE.MeshStandardMaterial({ color: 0xe8e1d6, roughness: 0.4 }),
-      );
-      plinth.position.set(x, 0.46, 1.15);
-      plinth.castShadow = true;
-      scene.add(plinth);
-      if (p.tex) {
-        const board = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.52, 0.68),
-          new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.6 }),
-        );
-        board.position.set(x, 1.35, 1.16);
-        scene.add(board);
-      } else {
-        scene.add(sampleSculpture(x));
-      }
+      scene.add(p.model === 'pendant' ? makePendant(x) : makeTower(x));
     } else {
       const frameW = 1.82;
       const frameH = 2.18;
@@ -377,8 +433,11 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }
 
   function pieceBox(work) {
+    if (work.model === 'pendant') {
+      return { minX: work.x - 0.4, maxX: work.x + 0.4, minY: 0.02, maxY: 1.85, z: 1.05 };
+    }
     if (work.kind === 'sculpture') {
-      return { minX: work.x - 0.5, maxX: work.x + 0.5, minY: 0.02, maxY: 2.08, z: 1.05 };
+      return { minX: work.x - 0.55, maxX: work.x + 0.55, minY: 0.02, maxY: 2.62, z: 1.05 };
     }
     return { minX: work.x - 0.98, maxX: work.x + 0.98, minY: 0.98, maxY: 3.32, z: 0 };
   }
@@ -390,7 +449,8 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     if (work.kind === 'sculpture') {
       const w = narrow ? 0.95 : 0.82;
       const h = w / aspect;
-      return { x: work.x + 0.35 + 0.08 + w / 2, y: 0.58, w, h, z: 1.55 };
+      const edge = work.model === 'pendant' ? 0.32 : 0.46;
+      return { x: work.x + edge + 0.08 + w / 2, y: 0.58, w, h, z: 1.55 };
     }
     if (narrow) {
       const w = 1.45;

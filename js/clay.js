@@ -69,7 +69,7 @@ uniform vec3 uCamObj, uBMin, uBMax;
 uniform vec3 uKey, uFill, uClay;
 uniform vec2 uHelloSize, uMarkSize;
 uniform sampler2D uPhoto;
-uniform float uHasPhoto, uFinish, uSpan;
+uniform float uHasPhoto, uFinish, uSpan, uAlpha;
 varying vec3 vObj;
 
 float hash(vec3 p){ p = fract(p*0.3183099+.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
@@ -181,7 +181,7 @@ void main(){
     p += rd * d * 0.75;
     if (any(lessThan(p, uBMin-0.02)) || any(greaterThan(p, uBMax+0.02))) break;
   }
-  if (hit < 0.5) discard;
+  if (hit < 0.5 || uAlpha < 0.01) discard;
   vec3 nO = calcN(p);
   vec3 n = normalize(mat3(modelMatrix) * nO);
   vec3 wp = (modelMatrix * vec4(p,1.0)).xyz;
@@ -207,7 +207,7 @@ void main(){
   vec3 col = alb * (vec3(1.0,0.95,0.88)*dif*1.55 + vec3(0.62,0.66,0.72)*dif2*0.35 + vec3(0.30,0.27,0.25)) * occ;
   col += vec3(1.0,0.96,0.9) * (spec + spec2) * occ;
   col += vec3(0.95,0.85,0.75) * fres * 0.18 * occ;
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, uAlpha);
   vec4 clip = projectionMatrix * viewMatrix * vec4(wp, 1.0);
   gl_FragDepth = (clip.z / clip.w) * 0.5 + 0.5;
   #include <tonemapping_fragment>
@@ -231,7 +231,9 @@ export function makeClay(textures) {
       uHasPhoto: { value: 0 },
       uFinish: { value: 0 },
       uSpan: { value: 1.42 },
+      uAlpha: { value: 1 },
     },
+    transparent: true,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
