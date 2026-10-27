@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { loadGeometry, loadImage, roomTexture, textureFromImage } from './media.js';
 
 const TAU = Math.PI * 2;
 const RINGS = 80;
@@ -24,29 +24,7 @@ const CLAY_TONES = [
   },
 ];
 
-function parseOBJ(text) {
-  const positions = [];
-  const indices = [];
-  const lines = text.split('\n');
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line.charCodeAt(0) === 118 && line.charCodeAt(1) === 32) {
-      const p = line.split(' ');
-      positions.push(+p[1], +p[2], +p[3]);
-    } else if (line.charCodeAt(0) === 102 && line.charCodeAt(1) === 32) {
-      const parts = line.split(' ');
-      const idx = [];
-      for (let k = 1; k < parts.length; k += 1) {
-        if (parts[k]) idx.push(parseInt(parts[k], 10) - 1);
-      }
-      for (let k = 1; k < idx.length - 1; k += 1) indices.push(idx[0], idx[k], idx[k + 1]);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  return geo;
-}
+export const CLAY_TEXTURES = CLAY_TONES.flatMap((tone) => [tone.color, tone.rough, tone.normal]);
 
 function fitGeo(geo, height) {
   geo.computeBoundingBox();
@@ -70,9 +48,9 @@ function fitGeo(geo, height) {
 async function loadModel(item) {
   if (!item || !item.model) return null;
   try {
-    const res = await fetch(encodeURI(item.model));
-    if (!res.ok) return null;
-    const geo = fitGeo(parseOBJ(await res.text()), item.height || 1);
+    const parsed = await loadGeometry(item.model);
+    if (!parsed) return null;
+    const geo = fitGeo(parsed, item.height || 1);
     const finish = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: item.color || '#c4b09a',
       roughness: item.roughness == null ? 0.72 : item.roughness,
@@ -99,19 +77,10 @@ async function loadModel(item) {
   }
 }
 
-function loadMap(url, colorSpace, renderer) {
-  return new Promise((resolve) => {
-    if (!url) { resolve(null); return; }
-    new THREE.TextureLoader().load(url, (tex) => {
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(2.2, 1.6);
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      if (colorSpace) tex.colorSpace = colorSpace;
-      tex.needsUpdate = true;
-      resolve(tex);
-    }, undefined, () => resolve(null));
-  });
+async function loadMap(url, colorSpace, renderer) {
+  const img = await loadImage(url);
+  if (!img) return null;
+  return textureFromImage(img, renderer, { colorSpace, repeat: [2.2, 1.6] });
 }
 
 function shellOf(geo) {
@@ -235,8 +204,7 @@ export async function createCeramics(renderer, { reduce, projects }) {
   const BG = new THREE.Color('#e8e1d6');
   scene.background = BG;
   scene.fog = new THREE.Fog(BG, 9, 17);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = roomTexture(renderer, 0.04);
   scene.environmentIntensity = 0.55;
 
   const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 60);
