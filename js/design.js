@@ -1,53 +1,31 @@
 import * as THREE from 'three';
-import { ARTIST } from './projects.js';
 import { loadImage, roomTexture } from './media.js';
 
-// Design is a ring binder on the same bone ground as the other scenes.
-// 00 is the closed cover. Each later number is one project, in category
-// order. Only the first project of a category has a divider tab, labelled
-// with that category in one horizontal size. A two-word label wraps so the
-// tab only sticks out a short way past the page. Every page is the cover
-// white. Only the tab is coloured, and the type on the page uses that colour.
-// Each spread is filled with that project's own images, videos and text.
-// A video keeps its own aspect ratio. The page turns around the rings.
+// Design is an open cream hard-cover folder. There are no rings.
+// Peak Identity and MEQAF Identity each have two spreads, painted to match
+// Hamdi's template pages. A tall rounded tab carries the project name.
+// Videos play inside the laptop and iPad screens, muted, looping, and inline.
+// The right-hand page still curls; the turn duration and the lift off the
+// page stay as they were so the spread does not flash.
 
-const TEX_W = 720;
-const TEX_H = 992;
-const PAGE_W = 1.05;
+const TEX_W = 860;
+const TEX_H = 1054;
+const PAGE_W = 1.08;
 const PAGE_H = PAGE_W * (TEX_H / TEX_W);
-const GUTTER = 0.016;
-const HOLE_X = 0.108;
-const RING_Z = 0.02;
-const RING_Y = [0.46, 0, -0.46];
-const SECTION_COLORS = ['#6f8fbf', '#e7a0b4', '#f2d15a', '#3f9a4a', '#f0a04a', '#d6453d', '#8d6bb5', '#3aa8a0', '#c4785a', '#8a9a4a'];
-const CREAM = '#f3f0e6';
-const INK = '#1c1916';
+const GUTTER = 0.012;
+const TAB_W = 0.15;
+const TAB_H = 0.62;
+const PAGE = '#ECEAE6';
+const INK = '#141414';
+const PAD = 22;
+const GAP = 9;
 
-function groupByCategory(list) {
-  const order = [];
-  const buckets = new Map();
-  list.forEach((project) => {
-    const key = project.category || project.title || '';
-    if (!buckets.has(key)) {
-      order.push(key);
-      buckets.set(key, []);
-    }
-    buckets.get(key).push(project);
-  });
-  const grouped = [];
-  order.forEach((key) => buckets.get(key).forEach((project) => grouped.push(project)));
-  return grouped;
-}
+// Screen holes measured on the device mockups, as fractions of the picture.
+const LAPTOP_SCREEN = { x: 0.082, y: 0.218, w: 0.555, h: 0.395 };
+const IPAD_SCREEN = { x: 0.222, y: 0.108, w: 0.556, h: 0.782 };
 
 function easeInOut(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
-}
-
-function mixHex(hex, toward, t) {
-  const parse = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const a = parse(hex);
-  const b = parse(toward);
-  return `#${a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
 }
 
 function luminance(hex) {
@@ -62,36 +40,30 @@ function makeVideo(src) {
   const video = document.createElement('video');
   video.muted = true;
   video.defaultMuted = true;
+  video.volume = 0;
   video.loop = true;
   video.playsInline = true;
   video.preload = 'auto';
   video.setAttribute('muted', '');
   video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
   video.src = src;
   return video;
 }
 
-function trackedWidth(ctx, text, tracking) {
-  const chars = [...text];
-  if (!chars.length) return 0;
-  return chars.reduce((sum, c) => sum + ctx.measureText(c).width, 0) + tracking * (chars.length - 1);
-}
-
-function fillTracked(ctx, text, x, y, align, tracking) {
-  const chars = [...text];
-  if (!chars.length) return;
-  const widths = chars.map((c) => ctx.measureText(c).width);
-  const total = widths.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1);
-  let cx = x;
-  if (align === 'center') cx = x - total / 2;
-  if (align === 'right') cx = x - total;
-  const prev = ctx.textAlign;
-  ctx.textAlign = 'left';
-  chars.forEach((c, i) => {
-    ctx.fillText(c, cx, y);
-    cx += widths[i] + tracking;
+function preloadVideo(video) {
+  return new Promise((resolve) => {
+    if (!video) { resolve(); return; }
+    if (video.readyState >= 1) { resolve(); return; }
+    const done = () => {
+      video.removeEventListener('loadedmetadata', done);
+      video.removeEventListener('error', done);
+      resolve();
+    };
+    video.addEventListener('loadedmetadata', done);
+    video.addEventListener('error', done);
+    setTimeout(done, 1200);
   });
-  ctx.textAlign = prev;
 }
 
 function wrapLines(ctx, text, maxW) {
@@ -103,52 +75,95 @@ function wrapLines(ctx, text, maxW) {
     if (line && ctx.measureText(next).width > maxW) {
       lines.push(line);
       line = word;
-    } else {
-      line = next;
-    }
+    } else line = next;
   });
   if (line) lines.push(line);
   return lines;
 }
 
-function drawContain(ctx, img, x, y, w, h) {
-  if (!img || w < 2 || h < 2) return;
-  const ir = (img.naturalWidth || img.width) / (img.naturalHeight || img.height || 1);
-  const r = w / h;
+function drawWrapped(ctx, text, x, y, maxW, lead) {
+  wrapLines(ctx, text, maxW).forEach((line) => {
+    ctx.fillText(line, x, y);
+    y += lead;
+  });
+  return y;
+}
+
+function mediaSize(img) {
+  const w = img.naturalWidth || img.videoWidth || img.width || 1;
+  const h = img.naturalHeight || img.videoHeight || img.height || 1;
+  return { w, h, r: w / Math.max(1, h) };
+}
+
+function placed(img, x, y, w, h, mode) {
+  const { r } = mediaSize(img);
+  const box = w / Math.max(1, h);
   let dw;
   let dh;
-  if (ir > r) {
-    dw = w;
-    dh = w / ir;
-  } else {
-    dh = h;
-    dw = h * ir;
-  }
-  const dx = x + (w - dw) / 2;
-  const dy = y + (h - dh) / 2;
+  if (mode === 'contain') {
+    if (r > box) { dw = w; dh = w / r; } else { dh = h; dw = h * r; }
+  } else if (r > box) { dh = h; dw = h * r; } else { dw = w; dh = w / r; }
+  return { dx: x + (w - dw) / 2, dy: y + (h - dh) / 2, dw, dh };
+}
+
+function drawPhoto(ctx, img, x, y, w, h) {
+  if (!img || w < 2 || h < 2) return;
+  const p = placed(img, x, y, w, h, 'cover');
   ctx.save();
-  ctx.shadowColor = 'rgba(20,16,12,0.18)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 3;
-  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.drawImage(img, p.dx, p.dy, p.dw, p.dh);
   ctx.restore();
 }
 
-function grainCanvas() {
-  const c = document.createElement('canvas');
-  c.width = 160;
-  c.height = 160;
-  const g = c.getContext('2d');
-  const img = g.createImageData(160, 160);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = 90 + Math.random() * 150;
-    img.data[i] = v;
-    img.data[i + 1] = v;
-    img.data[i + 2] = v;
-    img.data[i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return c;
+function drawDevice(ctx, img, x, y, w, h) {
+  if (!img || w < 2 || h < 2) return { dx: x, dy: y, dw: w, dh: h };
+  const p = placed(img, x, y, w, h, 'contain');
+  ctx.drawImage(img, p.dx, p.dy, p.dw, p.dh);
+  return p;
+}
+
+function paintScreen(ctx, screen) {
+  const video = screen.video;
+  if (!video || video.readyState < 2) return;
+  const { x, y, w, h } = screen.rect;
+  if (w < 2 || h < 2) return;
+  const p = placed(video, x, y, w, h, 'contain');
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.drawImage(video, p.dx, p.dy, p.dw, p.dh);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function roundedShape(w, h, r) {
+  const shape = new THREE.Shape();
+  const x = -w / 2;
+  const y = -h / 2;
+  const radius = Math.min(r, w / 2, h / 2);
+  shape.moveTo(x + radius, y);
+  shape.lineTo(x + w - radius, y);
+  shape.quadraticCurveTo(x + w, y, x + w, y + radius);
+  shape.lineTo(x + w, y + h - radius);
+  shape.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  shape.lineTo(x + radius, y + h);
+  shape.quadraticCurveTo(x, y + h, x, y + h - radius);
+  shape.lineTo(x, y + radius);
+  shape.quadraticCurveTo(x, y, x + radius, y);
+  return shape;
 }
 
 function roughTexture() {
@@ -172,397 +187,14 @@ function roughTexture() {
   return tex;
 }
 
-const GRAIN = grainCanvas();
-
-function punch(ctx, side) {
-  const inset = ((HOLE_X - GUTTER) / PAGE_W) * TEX_W;
-  const x = side === 'right' ? TEX_W - inset : inset;
-  ctx.globalCompositeOperation = 'destination-out';
-  RING_Y.forEach((worldY) => {
-    const y = (0.5 - worldY / PAGE_H) * TEX_H;
-    ctx.beginPath();
-    ctx.arc(x, y, 15, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.save();
-  RING_Y.forEach((worldY) => {
-    const y = (0.5 - worldY / PAGE_H) * TEX_H;
-    const shade = ctx.createRadialGradient(x - 2, y - 2, 3, x, y, 18);
-    shade.addColorStop(0, 'rgba(0,0,0,0)');
-    shade.addColorStop(0.7, 'rgba(0,0,0,0)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.3)');
-    ctx.fillStyle = shade;
-    ctx.beginPath();
-    ctx.arc(x, y, 18, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.restore();
-}
-
-function drawRules(ctx, header, footer, holes, ink) {
-  const leftX = holes === 'left' ? 98 : 42;
-  const rightX = holes === 'right' ? TEX_W - 98 : TEX_W - 42;
-  const light = luminance(ink) > 0.7;
-  ctx.save();
-  ctx.strokeStyle = light ? 'rgba(246,241,230,0.72)' : 'rgba(22,18,14,0.55)';
-  ctx.lineWidth = 1.25;
-  ctx.beginPath();
-  ctx.moveTo(leftX, 58);
-  ctx.lineTo(rightX, 58);
-  ctx.moveTo(leftX, TEX_H - 58);
-  ctx.lineTo(rightX, TEX_H - 58);
-  ctx.stroke();
-  ctx.fillStyle = ink;
-  ctx.font = '600 14px Inter, "Noto Naskh Arabic", sans-serif';
-  ctx.textBaseline = 'middle';
-  const place = (labels, y, tracking) => {
-    fillTracked(ctx, labels[0] || '', leftX, y, 'left', tracking);
-    fillTracked(ctx, labels[1] || '', TEX_W / 2, y, 'center', tracking);
-    fillTracked(ctx, labels[2] || '', rightX, y, 'right', tracking);
-  };
-  place(header, 34, 2.8);
-  ctx.font = '500 13px Inter, "Noto Naskh Arabic", sans-serif';
-  place(footer, TEX_H - 34, 2.2);
-  ctx.restore();
-}
-
-function drawSheet(ctx, { fill, header, footer, holes, ink }) {
-  ctx.clearRect(0, 0, TEX_W, TEX_H);
-  ctx.fillStyle = fill;
-  ctx.fillRect(0, 0, TEX_W, TEX_H);
-  ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = ctx.createPattern(GRAIN, 'repeat');
-  ctx.fillRect(0, 0, TEX_W, TEX_H);
-  ctx.restore();
-  const spineAtLeft = holes !== 'right';
-  const grad = ctx.createLinearGradient(spineAtLeft ? 0 : TEX_W, 0, spineAtLeft ? 150 : TEX_W - 150, 0);
-  grad.addColorStop(0, 'rgba(20,16,12,0.11)');
-  grad.addColorStop(1, 'rgba(20,16,12,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, TEX_W, TEX_H);
-  drawRules(ctx, header, footer, holes === 'right' ? 'right' : 'left', ink || INK);
-  punch(ctx, holes === 'right' ? 'right' : 'left');
-}
-
-function contentBox(holes) {
-  if (holes === 'right') return { x: 42, w: TEX_W - 42 - 108 };
-  return { x: 108, w: TEX_W - 108 - 42 };
-}
-
-function sheetInk(fill) {
-  return luminance(fill) > 0.68 ? INK : '#f6f1e6';
-}
-
-function inkOf(hex) {
-  const color = new THREE.Color(hex || INK);
-  const hsl = { h: 0, s: 0, l: 0 };
-  color.getHSL(hsl);
-  if (hsl.s < 0.28) hsl.s = 0.42;
-  if (hsl.l > 0.4) hsl.l = 0.36;
-  return `#${new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s), hsl.l).getHexString()}`;
-}
-
-function aspectOf(slot) {
-  const video = slot && slot.video;
-  if (slot && slot.kind === 'video' && video && video.videoWidth && video.videoHeight) {
-    return video.videoWidth / video.videoHeight;
-  }
-  const img = slot && (slot.poster || slot.image);
-  const w = img ? (img.naturalWidth || img.videoWidth || img.width) : 1;
-  const h = img ? (img.naturalHeight || img.videoHeight || img.height) : 1;
-  if (!w || !h) return 1;
-  return w / h;
-}
-
-function preloadVideo(video) {
-  return new Promise((resolve) => {
-    if (!video) { resolve(); return; }
-    if (video.readyState >= 1) { resolve(); return; }
-    const done = () => {
-      video.removeEventListener('loadedmetadata', done);
-      video.removeEventListener('error', done);
-      resolve();
-    };
-    video.addEventListener('loadedmetadata', done);
-    video.addEventListener('error', done);
-    setTimeout(done, 1200);
-  });
-}
-
-function traceRound(ctx, x, y, w, h, r) {
-  const rad = Math.max(0, Math.min(r, w / 2, h / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + rad, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rad);
-  ctx.arcTo(x + w, y + h, x, y + h, rad);
-  ctx.arcTo(x, y + h, x, y, rad);
-  ctx.arcTo(x, y, x + w, y, rad);
-  ctx.closePath();
-}
-
-function coverImage(ctx, img, x, y, w, h) {
-  if (!img || w < 2 || h < 2) return;
-  const iw = img.naturalWidth || img.videoWidth || img.width;
-  const ih = img.naturalHeight || img.videoHeight || img.height || 1;
-  if (!iw || !ih) return;
-  const ir = iw / ih;
-  const tr = w / h;
-  let dw;
-  let dh;
-  if (ir > tr) {
-    dh = h;
-    dw = h * ir;
-  } else {
-    dw = w;
-    dh = w / ir;
-  }
-  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-}
-
-function drawTile(ctx, slot, x, y, w, h) {
-  if (w < 4 || h < 4) return;
-  const r = Math.max(10, Math.min(18, Math.round(Math.min(w, h) * 0.08)));
-  ctx.save();
-  ctx.shadowColor = 'rgba(20,16,12,0.30)';
-  ctx.shadowBlur = 16;
-  ctx.shadowOffsetY = 5;
-  ctx.fillStyle = 'rgba(255,252,246,0.20)';
-  traceRound(ctx, x, y, w, h, r);
-  ctx.fill();
-  ctx.restore();
-  const frame = slot && (slot.image || slot.poster);
-  if (frame) {
-    ctx.save();
-    traceRound(ctx, x, y, w, h, r);
-    ctx.clip();
-    coverImage(ctx, frame, x, y, w, h);
-    ctx.restore();
-  }
-  if (slot) slot.rect = { x, y, w, h, r };
-}
-
-function paintLive(ctx, slot) {
-  if (!slot || !slot.rect) return;
-  const { x, y, w, h, r } = slot.rect;
-  ctx.save();
-  traceRound(ctx, x, y, w, h, r || 12);
-  ctx.clip();
-  ctx.fillStyle = 'rgba(255,252,246,0.16)';
-  ctx.fillRect(x, y, w, h);
-  if (slot.kind === 'website' && slot.image) {
-    const image = slot.image;
-    const sw = image.naturalWidth || image.width;
-    const shFull = image.naturalHeight || image.height;
-    const scale = w / sw;
-    const srcH = Math.min(shFull, h / scale);
-    const maxScroll = Math.max(1, shFull - srcH);
-    const sy = slot.scroll == null ? 0 : slot.scroll % maxScroll;
-    ctx.drawImage(image, 0, sy, sw, srcH, x, y, w, h);
-  } else if (slot.kind === 'video') {
-    const frame = slot.video && slot.video.readyState >= 2 ? slot.video : (slot.poster || slot.image);
-    if (frame) drawContain(ctx, frame, x, y, w, h);
-  }
-  ctx.restore();
-}
-
-function drawSwatches(ctx, swatches, x, y, w, ink) {
-  const n = swatches.length;
-  if (!n) return 0;
-  const gap = Math.max(10, Math.round(w / 40));
-  const sw = Math.min(72, Math.floor((w - gap * (n - 1)) / n));
-  const named = swatches.some((s) => s.name);
-  swatches.forEach((swatch, i) => {
-    const sx = x + i * (sw + gap);
-    ctx.save();
-    ctx.shadowColor = 'rgba(20,16,12,0.24)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = swatch.hex;
-    traceRound(ctx, sx, y, sw, sw, 10);
-    ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(20,16,12,0.28)';
-    ctx.lineWidth = 1;
-    traceRound(ctx, sx, y, sw, sw, 10);
-    ctx.stroke();
-    ctx.fillStyle = ink;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    let ly = y + sw + 6;
-    if (swatch.name) {
-      ctx.font = '600 12px Inter, "Noto Naskh Arabic", sans-serif';
-      ctx.fillText(swatch.name, sx, ly);
-      ly += 15;
-    }
-    ctx.font = '500 11px Inter, sans-serif';
-    ctx.fillText(swatch.hex, sx, ly);
-  });
-  return sw + (named ? 40 : 24);
-}
-
-function drawFilm(ctx, rect, frame) {
-  const { x, y, w, h } = rect;
-  ctx.fillStyle = '#141414';
-  ctx.fillRect(x, y, w, h);
-  const band = Math.max(12, Math.min(22, w * 0.08));
-  const count = Math.max(4, Math.floor((h - 10) / 18));
-  ctx.fillStyle = CREAM;
-  for (let i = 0; i < count; i += 1) {
-    const hy = y + 6 + ((h - 16) / count) * i;
-    ctx.fillRect(x + 3, hy, band - 8, 7);
-    ctx.fillRect(x + w - band + 5, hy, band - 8, 7);
-  }
-  if (frame) drawContain(ctx, frame, x + band, y + 5, w - band * 2, h - 10);
-}
-
-function drawVisitTag(ctx, x, y, w, h) {
-  ctx.save();
-  ctx.shadowColor = 'transparent';
-  ctx.fillStyle = INK;
-  traceRound(ctx, x, y, w, h, 8);
-  ctx.fill();
-  ctx.fillStyle = CREAM;
-  const size = Math.max(11, Math.min(15, Math.floor(h * 0.42)));
-  ctx.font = `600 ${size}px Inter`;
-  ctx.textBaseline = 'middle';
-  fillTracked(ctx, 'VISIT SITE', x + w / 2, y + h / 2, 'center', 1.1);
-  ctx.restore();
-}
-
-function layoutStills(ctx, stills, x, y, w, h) {
-  const n = stills.length;
-  if (!n || h < 8) return;
-  const cols = n === 1 ? 1 : n >= 5 ? 3 : 2;
-  const rows = Math.ceil(n / cols);
-  const gap = 12;
-  const cw = (w - gap * (cols - 1)) / cols;
-  const ch = (h - gap * (rows - 1)) / rows;
-  stills.forEach((img, i) => {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    drawContain(ctx, img, x + c * (cw + gap), y + r * (ch + gap), cw, ch);
-  });
-}
-
-function filmRects(videos, x, y, w, h) {
-  const n = videos.length;
-  if (!n || h < 8) return [];
-  const cols = n >= 4 ? 2 : n === 3 ? 3 : 1;
-  const rows = Math.ceil(n / cols);
-  const gap = 10;
-  const cw = (w - gap * (cols - 1)) / cols;
-  const ch = (h - gap * (rows - 1)) / rows;
-  return videos.map((video, i) => {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    return {
-      video: video.video,
-      poster: video.poster,
-      rect: { x: x + c * (cw + gap), y: y + r * (ch + gap), w: cw, h: ch },
-    };
-  });
-}
-
-function footerParts(title, year, num) {
-  const words = String(title || '').toUpperCase().split(/\s+/).filter(Boolean);
-  if (words.length >= 3) return [year, words.slice(0, -1).join(' '), words[words.length - 1]];
-  if (words.length === 2) return [year, words[0], words[1]];
-  if (words.length === 1) return [year, words[0], num];
-  return [year, num, ''];
-}
-
-function coverFooter() {
-  const words = String(ARTIST.name || '').toUpperCase().split(/\s+/).filter(Boolean);
-  if (words.length >= 3) return [words[0], words.slice(1, -1).join(' '), words[words.length - 1]];
-  return [words[0] || '', words[1] || '', words[2] || ''];
-}
-
-// Short stick-out, like an index divider. The word stays horizontal.
-// Two-word labels wrap onto two lines instead of lengthening the tab.
-const TAB_FONT = 120;
-const TAB_TRACK = 1;
-const TAB_STICK = 0.26;
-
-function labelLines(label) {
-  const words = String(label || '').toUpperCase().split(/\s+/).filter(Boolean);
-  if (words.length <= 1) return [words[0] || ''];
-  if (words.length === 2) return words;
-  return [words.slice(0, -1).join(' '), words[words.length - 1]];
-}
-
-function tabTypeFor(labels) {
-  const probe = document.createElement('canvas').getContext('2d');
-  probe.font = `800 ${TAB_FONT}px Inter`;
-  const layouts = labels.map(labelLines);
-  const widest = Math.max(1, ...layouts.flat().map((line) => trackedWidth(probe, line, TAB_TRACK)));
-  const maxLines = Math.max(1, ...layouts.map((lines) => lines.length));
-  const padX = Math.round(TAB_FONT * 0.14);
-  const padY = Math.round(TAB_FONT * 0.1);
-  const lineH = Math.round(TAB_FONT * 1.12);
-  return {
-    size: TAB_FONT,
-    tracking: TAB_TRACK,
-    lineH,
-    width: Math.ceil(widest + padX * 2),
-    height: Math.ceil(maxLines * lineH + padY * 2),
-  };
-}
-
-function tabTexture(title, fg, type) {
-  const lines = labelLines(title);
-  const canvas = document.createElement('canvas');
-  canvas.width = type.width;
-  canvas.height = type.height;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = fg;
-  ctx.textBaseline = 'middle';
-  ctx.font = `800 ${type.size}px Inter`;
-  const block = type.lineH * lines.length;
-  let y = canvas.height / 2 - block / 2 + type.lineH / 2;
-  lines.forEach((line) => {
-    fillTracked(ctx, line, canvas.width / 2, y, 'center', type.tracking);
-    y += type.lineH;
-  });
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-function tabGeometry(w, h) {
-  const r = Math.min(0.045, h * 0.34, w * 0.4);
-  const shape = new THREE.Shape();
-  const hw = w / 2;
-  const hh = h / 2;
-  shape.moveTo(-hw, -hh);
-  shape.lineTo(hw - r, -hh);
-  shape.absarc(hw - r, -hh + r, r, -Math.PI / 2, 0, false);
-  shape.lineTo(hw, hh - r);
-  shape.absarc(hw - r, hh - r, r, 0, Math.PI / 2, false);
-  shape.lineTo(-hw, hh);
-  shape.lineTo(-hw, -hh);
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.018,
-    bevelEnabled: false,
-    curveSegments: 10,
-  });
-  geo.translate(0, 0, -0.009);
-  return geo;
-}
-
 function blobTexture() {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 512;
   const g = c.getContext('2d');
   const grd = g.createRadialGradient(256, 250, 20, 256, 256, 250);
-  grd.addColorStop(0, 'rgba(92,74,58,0.20)');
-  grd.addColorStop(0.5, 'rgba(92,74,58,0.07)');
+  grd.addColorStop(0, 'rgba(92,74,58,0.22)');
+  grd.addColorStop(0.55, 'rgba(92,74,58,0.07)');
   grd.addColorStop(1, 'rgba(92,74,58,0)');
   g.fillStyle = grd;
   g.fillRect(0, 0, 512, 512);
@@ -571,344 +203,324 @@ function blobTexture() {
   return tex;
 }
 
-export async function createDesign(renderer, { reduce, projects }) {
-  const sources = new Set();
-  projects.forEach((project) => {
-    (project.slots || project.items || []).forEach((item) => {
-      if (!item) return;
-      if (item.kind === 'video') {
-        if (item.poster) sources.add(item.poster);
-      } else if (item.src) sources.add(item.src);
-    });
+function tabTexture(label, color, anisotropy) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 240;
+  canvas.height = 980;
+  const ctx = canvas.getContext('2d');
+  roundRect(ctx, 8, 8, 224, 964, 48);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.save();
+  ctx.translate(120, 490);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = '#141414';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  let size = 72;
+  ctx.font = `800 ${size}px Inter, sans-serif`;
+  while (size > 36 && ctx.measureText(label).width > 900) {
+    size -= 2;
+    ctx.font = `800 ${size}px Inter, sans-serif`;
+  }
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function solidTabTexture(color, anisotropy) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 240;
+  canvas.height = 420;
+  const ctx = canvas.getContext('2d');
+  roundRect(ctx, 8, 8, 224, 404, 48);
+  ctx.fillStyle = color;
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function beginPage(ctx, side) {
+  ctx.clearRect(0, 0, TEX_W, TEX_H);
+  ctx.fillStyle = PAGE;
+  ctx.fillRect(0, 0, TEX_W, TEX_H);
+  const at = side === 'left' ? TEX_W : 0;
+  const dir = side === 'left' ? -1 : 1;
+  const shade = ctx.createLinearGradient(at, 0, at + dir * 48, 0);
+  shade.addColorStop(0, 'rgba(48,38,28,0.11)');
+  shade.addColorStop(1, 'rgba(48,38,28,0)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, TEX_W, TEX_H);
+}
+
+function paintCopy(ctx, spec, side) {
+  beginPage(ctx, side);
+  const x = 48;
+  const maxW = TEX_W - 96;
+  const compact = !spec.body && !spec.lead;
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  let y = compact ? 40 : 52;
+  const titleSize = compact ? 78 : 108;
+  ctx.font = `800 ${titleSize}px Inter, sans-serif`;
+  ctx.fillText(spec.title || '', x, y);
+  y += titleSize + 6;
+  ctx.font = '800 26px Inter, sans-serif';
+  ctx.fillText(spec.kicker || '', x, y);
+  y += 34;
+  ctx.fillText(spec.year || '', x, y);
+  y += compact ? 26 : 42;
+  if (spec.lead) {
+    ctx.font = '800 22px Inter, sans-serif';
+    y = drawWrapped(ctx, spec.lead, x, y, maxW, 30);
+    y += 18;
+  }
+  ctx.font = '800 18px Inter, sans-serif';
+  (spec.body || []).forEach((para) => {
+    y = drawWrapped(ctx, para, x, y, maxW, 26);
+    y += 18;
   });
+  return y;
+}
+
+function drawSwatches(ctx, list, x, y, w, h) {
+  if (!list || !list.length || w < 8 || h < 8) return;
+  const gap = 5;
+  const bh = (h - gap * (list.length - 1)) / list.length;
+  list.forEach((swatch, index) => {
+    const yy = y + index * (bh + gap);
+    ctx.fillStyle = swatch.hex;
+    ctx.fillRect(x, yy, w, bh);
+    if (luminance(swatch.hex) > 0.9) {
+      ctx.strokeStyle = 'rgba(20,16,12,0.28)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, yy + 0.5, w - 1, bh - 1);
+    }
+    ctx.fillStyle = luminance(swatch.hex) > 0.55 ? INK : '#f4f1ea';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let size = Math.max(10, Math.min(14, Math.floor(w * 0.13)));
+    ctx.font = `800 ${size}px Inter, sans-serif`;
+    let lines = wrapLines(ctx, swatch.name || '', w - 8);
+    while (size > 9 && lines.length > 2) {
+      size -= 1;
+      ctx.font = `800 ${size}px Inter, sans-serif`;
+      lines = wrapLines(ctx, swatch.name || '', w - 8);
+    }
+    const lead = size + 1;
+    const mid = yy + bh / 2 - ((lines.length - 1) * lead) / 2;
+    lines.forEach((line, i) => ctx.fillText(line, x + w / 2, mid + i * lead));
+  });
+}
+
+function rememberScreen(page, side, video, hole, drawn) {
+  if (!video || !drawn) return;
+  page.screens.push({
+    side,
+    video,
+    rect: {
+      x: drawn.dx + hole.x * drawn.dw,
+      y: drawn.dy + hole.y * drawn.dh,
+      w: hole.w * drawn.dw,
+      h: hole.h * drawn.dh,
+    },
+  });
+}
+
+function paintSpread(ctx, spec, page, side, images) {
+  beginPage(ctx, side);
+  const photo = (src) => images.get(src) || null;
+  const x = PAD;
+  const y = PAD;
+  const w = TEX_W - PAD * 2;
+  const h = TEX_H - PAD * 2;
+  if (spec.kind === 'peak-1') {
+    const topH = h * 0.545;
+    drawPhoto(ctx, photo(spec.board), x, y, w, topH);
+    const botY = y + topH + GAP;
+    const botH = y + h - botY;
+    const leftW = w * 0.48;
+    drawPhoto(ctx, photo(spec.saxon), x, botY, leftW, botH);
+    const cx = x + leftW + GAP;
+    const cw = x + w - cx;
+    const cardH = botH * 0.4;
+    const cardW = (cw - GAP) / 2;
+    drawPhoto(ctx, photo(spec.cardLeft), cx, botY, cardW, cardH);
+    drawPhoto(ctx, photo(spec.cardRight), cx + cardW + GAP, botY, cardW, cardH);
+    const lowY = botY + cardH + GAP;
+    const lowH = botY + botH - lowY;
+    drawPhoto(ctx, photo(spec.yearPost), cx, lowY, cardW, lowH);
+    drawPhoto(ctx, photo(spec.staff), cx + cardW + GAP, lowY, cardW, lowH);
+    return;
+  }
+  if (spec.kind === 'peak-2-left') {
+    const cursor = paintCopy(ctx, spec, side);
+    const rowY = cursor + 8;
+    const rowH = h * 0.2;
+    const half = (w - GAP) / 2;
+    drawPhoto(ctx, photo(spec.badges), x, rowY, half, rowH);
+    drawPhoto(ctx, photo(spec.folder), x + half + GAP, rowY, half, rowH);
+    const lowY = rowY + rowH + GAP;
+    const lowH = TEX_H - PAD - lowY;
+    const swatchW = 112;
+    const laptopW = w - swatchW - GAP;
+    const drawn = drawDevice(ctx, photo(spec.laptop), x, lowY, laptopW, lowH);
+    const laptop = page.videos.find((entry) => entry.src === spec.video.src);
+    rememberScreen(page, side, laptop && laptop.video, LAPTOP_SCREEN, drawn);
+    drawSwatches(ctx, spec.swatches, x + laptopW + GAP, lowY, swatchW, lowH);
+    return;
+  }
+  if (spec.kind === 'peak-2-right') {
+    const topH = h * 0.4;
+    const half = (w - GAP) / 2;
+    const leftDrawn = drawDevice(ctx, photo(spec.ipadLeft), x, y, half, topH);
+    const rightDrawn = drawDevice(ctx, photo(spec.ipadRight), x + half + GAP, y, half, topH);
+    const leftVideo = page.videos.find((entry) => entry.src === spec.videoLeft.src);
+    const rightVideo = page.videos.find((entry) => entry.src === spec.videoRight.src);
+    rememberScreen(page, side, leftVideo && leftVideo.video, IPAD_SCREEN, leftDrawn);
+    rememberScreen(page, side, rightVideo && rightVideo.video, IPAD_SCREEN, rightDrawn);
+    const botY = y + topH + GAP;
+    drawPhoto(ctx, photo(spec.profile), x, botY, w, y + h - botY);
+    return;
+  }
+  if (spec.kind === 'meqaf-1') {
+    const topH = h * 0.3;
+    const swatchW = 108;
+    const paperW = w * 0.28;
+    const stickerW = w - paperW - swatchW - GAP * 2;
+    drawPhoto(ctx, photo(spec.paper), x, y, paperW, topH);
+    drawPhoto(ctx, photo(spec.sticker), x + paperW + GAP, y, stickerW, topH);
+    drawSwatches(ctx, spec.swatches, x + paperW + stickerW + GAP * 2, y, swatchW, topH);
+    const midY = y + topH + GAP;
+    const midH = h * 0.34;
+    const half = (w - GAP) / 2;
+    drawPhoto(ctx, photo(spec.boxOpen), x, midY, half, midH);
+    drawPhoto(ctx, photo(spec.boxClosed), x + half + GAP, midY, half, midH);
+    const botY = midY + midH + GAP;
+    const botH = y + h - botY;
+    const logoW = w * 0.4;
+    drawPhoto(ctx, photo(spec.logo), x, botY, logoW, botH);
+    drawPhoto(ctx, photo(spec.magnet), x + logoW + GAP, botY, w - logoW - GAP, botH);
+    return;
+  }
+  if (spec.kind === 'meqaf-2-left') {
+    const cursor = paintCopy(ctx, spec, side);
+    const gridY = cursor + 10;
+    const gridH = TEX_H - PAD - gridY;
+    const cellW = (w - GAP) / 2;
+    const cellH = (gridH - GAP) / 2;
+    drawPhoto(ctx, photo(spec.post), x, gridY, cellW, cellH);
+    drawPhoto(ctx, photo(spec.patternRed), x + cellW + GAP, gridY, cellW, cellH);
+    drawPhoto(ctx, photo(spec.patternCream), x, gridY + cellH + GAP, cellW, cellH);
+    drawPhoto(ctx, photo(spec.magnets), x + cellW + GAP, gridY + cellH + GAP, cellW, cellH);
+    return;
+  }
+  if (spec.kind === 'meqaf-2-right') {
+    const leftW = w * 0.46;
+    const rightX = x + leftW + GAP;
+    const rightW = x + w - rightX;
+    const cardH = h * 0.3;
+    const flyerH = h * 0.34;
+    drawPhoto(ctx, photo(spec.card), x, y, leftW, cardH);
+    drawPhoto(ctx, photo(spec.flyer), x, y + cardH + GAP, leftW, flyerH);
+    const logoY = y + cardH + flyerH + GAP * 2;
+    drawPhoto(ctx, photo(spec.logo), x, logoY, leftW, y + h - logoY);
+    const postH = h * 0.56;
+    drawPhoto(ctx, photo(spec.post), rightX, y, rightW, postH);
+    drawPhoto(ctx, photo(spec.sheet), rightX, y + postH + GAP, rightW, y + h - (y + postH + GAP));
+  }
+}
+
+function collectSources(projects) {
+  const sources = new Set();
+  const walk = (value) => {
+    if (!value) return;
+    if (typeof value === 'string') {
+      if (value.startsWith('assets/') && !/\.mp4$/i.test(value)) sources.add(value);
+      return;
+    }
+    if (Array.isArray(value)) { value.forEach(walk); return; }
+    if (typeof value === 'object') Object.values(value).forEach(walk);
+  };
+  projects.forEach((project) => walk(project.spreads));
+  return sources;
+}
+
+function collectVideos(spec) {
+  const videos = [];
+  const walk = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (typeof value.src === 'string' && /\.mp4$/i.test(value.src)) videos.push(value);
+    Object.values(value).forEach((child) => {
+      if (child && typeof child === 'object') walk(child);
+    });
+  };
+  walk(spec);
+  return videos;
+}
+
+export async function createDesign(renderer, { reduce, projects }) {
   const images = new Map();
-  await Promise.all([...sources].map(async (src) => {
+  await Promise.all([...collectSources(projects)].map(async (src) => {
     images.set(src, await loadImage(src));
   }));
-
-  function mediaSlot(item) {
-    if (!item) return null;
-    if (item.kind === 'video') {
-      return {
-        kind: 'video',
-        video: makeVideo(item.src),
-        poster: images.get(item.poster) || null,
-        image: images.get(item.poster) || null,
-      };
-    }
-    if (item.kind === 'website') {
-      return { kind: 'website', image: images.get(item.src) || null, href: item.href || '', scroll: 0 };
-    }
-    const image = images.get(item.src) || null;
-    if (!image) return null;
-    return { kind: 'image', image };
+  if (document.fonts?.load) {
+    try {
+      await document.fonts.load('800 64px Inter');
+      await document.fonts.load('800 18px Inter');
+    } catch (err) { /* measure with the fallback face */ }
   }
 
-  const ordered = groupByCategory(projects);
-  const pages = ordered.map((project, index) => {
-    const num = String(index + 1).padStart(2, '0');
-    const raw = project.slots || [];
-    const slots = raw.map((item) => mediaSlot(item)).filter(Boolean);
-    const videos = slots.filter((slot) => slot && slot.kind === 'video');
-    const website = slots.find((slot) => slot && slot.kind === 'website') || null;
-    const leftDyn = false;
-    const rightDyn = false;
-    return {
-      project,
-      index,
-      num,
-      color: SECTION_COLORS[0],
-      fill: CREAM,
-      title: project.title || '',
-      text: project.text || '',
-      label: project.label || project.category || '',
-      year: project.year || '',
-      rightTitle: project.rightTitle || '',
-      rightText: project.rightText || '',
-      swatches: project.swatches || [],
-      slots,
-      videos,
-      website,
-      scroll: 0,
-      visitRect: null,
-      leftDyn,
-      rightDyn,
-      dynamic: leftDyn || rightDyn,
-      section: 0,
-    };
+  const pages = [];
+  projects.forEach((project) => {
+    (project.spreads || []).forEach((spread) => {
+      const videos = [];
+      const seen = new Set();
+      ['left', 'right'].forEach((side) => {
+        collectVideos(spread[side]).forEach((item) => {
+          if (seen.has(item.src)) return;
+          seen.add(item.src);
+          videos.push({ src: item.src, video: makeVideo(item.src), poster: images.get(item.poster) || null });
+        });
+      });
+      pages.push({
+        project,
+        title: project.title || '',
+        spread,
+        videos,
+        screens: [],
+        leftDyn: false,
+        rightDyn: false,
+      });
+    });
   });
 
-  const sections = [];
-  pages.forEach((page) => {
-    const key = page.project.category || page.title || page.num;
-    const prev = sections[sections.length - 1];
-    if (!prev || prev.key !== key) {
-      sections.push({
-        key,
-        label: key,
-        first: page.index,
-        color: SECTION_COLORS[sections.length % SECTION_COLORS.length],
-      });
-    }
-    const section = sections[sections.length - 1];
-    page.section = sections.length - 1;
-    page.color = section.color;
-    page.fill = CREAM;
-    page.ink = inkOf(section.color);
-  });
-
-  const nameFooter = coverFooter();
-
-  function runningHeader(page, holes) {
-    if (!page) return ['DESIGN', 'PORTFOLIO', '00'];
-    if (holes === 'right') return [String(page.title || '').toUpperCase(), '', ''];
-    const bits = [page.label, page.year].filter(Boolean).join('  ').toUpperCase();
-    return [bits, '', ''];
-  }
-
-  function planSpread(page) {
-    const items = page.slots.map((slot) => ({ slot, aspect: Math.max(0.2, aspectOf(slot)) }));
-    const sites = items.filter((item) => item.slot.kind === 'website');
-    const rest = items.filter((item) => item.slot.kind !== 'website');
-    const left = [];
-    const right = [];
-    if (!rest.length) {
-      right.push(...sites);
-    } else if (rest.length === 1 && !sites.length) {
-      right.push(rest[0]);
-    } else {
-      const leftCount = Math.max(1, Math.ceil(rest.length / 2));
-      left.push(...rest.slice(0, leftCount));
-      right.push(...rest.slice(leftCount), ...sites);
-    }
-    left.forEach((item) => { item.slot.page = 'left'; });
-    right.forEach((item) => { item.slot.page = 'right'; });
-    page.plan = { left, right };
-    page.leftDyn = left.some((item) => item.slot.kind === 'video');
-    page.rightDyn = right.some((item) => item.slot.kind === 'video');
-    page.dynamic = page.leftDyn || page.rightDyn;
-  }
-
-  function drawCopy(ctx, page, x, y, w, ink, roomy) {
-    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
-    ctx.fillStyle = ink;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    let cursor = y;
-    if (page.label) {
-      ctx.font = '600 15px Inter, "Noto Naskh Arabic", sans-serif';
-      fillTracked(ctx, String(page.label).toUpperCase(), x, cursor + 12, 'left', 2.2);
-      cursor += 36;
-    }
-    const title = String(page.title || '');
-    if (title) {
-      let size = roomy ? 64 : 40;
-      ctx.font = `800 ${size}px ${face}`;
-      let lines = wrapLines(ctx, title, w);
-      const cap = roomy ? 4 : 2;
-      while (size > 26 && lines.length > cap) {
-        size -= 2;
-        ctx.font = `800 ${size}px ${face}`;
-        lines = wrapLines(ctx, title, w);
-      }
-      lines.slice(0, cap).forEach((line) => {
-        ctx.fillText(line, x, cursor);
-        cursor += size * 1.02;
-      });
-      cursor += 12;
-    }
-    if (page.text) {
-      ctx.font = `400 ${roomy ? 22 : 18}px ${face}`;
-      const lead = roomy ? 30 : 24;
-      wrapLines(ctx, page.text, w).slice(0, roomy ? 8 : 4).forEach((line) => {
-        ctx.fillText(line, x, cursor);
-        cursor += lead;
-      });
-      cursor += 8;
-    }
-    if (page.swatches.length) cursor += drawSwatches(ctx, page.swatches, x, cursor, w, ink) + 16;
-    return cursor;
-  }
-
-  function drawNote(ctx, page, x, y, w, ink) {
-    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
-    ctx.fillStyle = ink;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    let cursor = y;
-    if (page.rightTitle) {
-      let size = 32;
-      ctx.font = `800 ${size}px ${face}`;
-      let lines = wrapLines(ctx, page.rightTitle, w);
-      while (size > 22 && lines.length > 2) {
-        size -= 2;
-        ctx.font = `800 ${size}px ${face}`;
-        lines = wrapLines(ctx, page.rightTitle, w);
-      }
-      lines.slice(0, 2).forEach((line) => {
-        ctx.fillText(line, x, cursor);
-        cursor += size * 1.05;
-      });
-      cursor += 8;
-    }
-    if (page.rightText) {
-      ctx.font = `400 18px ${face}`;
-      wrapLines(ctx, page.rightText, w).slice(0, 4).forEach((line) => {
-        ctx.fillText(line, x, cursor);
-        cursor += 24;
-      });
-      cursor += 12;
-    }
-    return cursor;
-  }
-
-  function placeMedia(ctx, item, x, y, w, h, page, side) {
-    if (w < 8 || h < 8) return;
-    const slot = item.slot;
-    const r = Math.max(8, Math.min(16, Math.round(Math.min(w, h) * 0.045)));
-    const frame = slot.poster || slot.image;
-    ctx.save();
-    ctx.shadowColor = 'rgba(20,16,12,0.22)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
-    traceRound(ctx, x, y, w, h, r);
-    ctx.fillStyle = '#fffdf8';
-    ctx.fill();
-    ctx.restore();
-    if (frame) {
-      ctx.save();
-      traceRound(ctx, x, y, w, h, r);
-      ctx.clip();
-      drawContain(ctx, frame, x, y, w, h);
-      ctx.restore();
-    }
-    slot.rect = { x, y, w, h, r };
-    slot.page = side;
-    if (side === 'right' && slot.kind === 'website' && slot.href) {
-      const bw = Math.min(168, w - 20);
-      const bh = 32;
-      page.visitRect = { x: x + 10, y: y + h - bh - 10, w: bw, h: bh };
-      drawVisitTag(ctx, page.visitRect.x, page.visitRect.y, bw, bh);
-    }
-  }
-
-  function packMedia(ctx, items, area, page, side) {
-    if (!items.length || area.h < 24 || area.w < 24) return;
-    const gap = 14;
-    if (items.length === 1) {
-      placeMedia(ctx, items[0], area.x, area.y, area.w, area.h, page, side);
-      return;
-    }
-    const rows = items.length <= 2 ? 1 : items.length <= 5 ? 2 : items.length <= 9 ? 3 : 4;
-    const per = Math.ceil(items.length / rows);
-    const groups = [];
-    for (let i = 0; i < items.length; i += per) groups.push(items.slice(i, i + per));
-    const naturals = groups.map((group) => {
-      const sum = group.reduce((total, item) => total + item.aspect, 0);
-      return (area.w - gap * (group.length - 1)) / Math.max(0.01, sum);
-    });
-    const sumH = naturals.reduce((total, value) => total + value, 0);
-    const avail = area.h - gap * (groups.length - 1);
-    const scale = Math.min(1, avail / Math.max(1, sumH));
-    const used = sumH * scale + gap * (groups.length - 1);
-    let y = area.y + Math.max(0, (area.h - used) / 2);
-    groups.forEach((group, index) => {
-      const h = naturals[index] * scale;
-      let x = area.x;
-      group.forEach((item) => {
-        const w = h * item.aspect;
-        placeMedia(ctx, item, x, y, w, h, page, side);
-        x += w + gap;
-      });
-      y += h + gap;
-    });
-  }
-
-  function paintSpread(ctx, page, holes, ink) {
-    const box = contentBox(holes);
-    const side = holes === 'right' ? 'left' : 'right';
-    const items = page.plan ? page.plan[side] : [];
-    const top = 76;
-    const bottom = TEX_H - 72;
-    let y = top;
-    const roomy = side === 'left' && !items.length;
-    if (side === 'left') y = drawCopy(ctx, page, box.x, y, box.w, ink, roomy);
-    else if (page.rightTitle || page.rightText) y = drawNote(ctx, page, box.x, y, box.w, ink);
-    if (side === 'right') page.visitRect = null;
-    packMedia(ctx, items, { x: box.x, y, w: box.w, h: Math.max(40, bottom - y) }, page, side);
-  }
-
-  function paintBase(canvas, page, holes) {
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    const fill = page ? page.fill : CREAM;
-    const ink = page ? (page.ink || inkOf(page.color)) : INK;
-    const footer = page ? footerParts(page.title, page.year, page.num) : nameFooter;
-    drawSheet(ctx, { fill, header: runningHeader(page, holes), footer, holes, ink });
-    if (!page) {
-      ctx.fillStyle = INK;
-      ctx.textBaseline = 'middle';
-      ctx.font = '500 24px Inter';
-      fillTracked(ctx, String(ARTIST.name || '').toUpperCase(), TEX_W / 2, TEX_H / 2 - 86, 'center', 1.5);
-      ctx.textAlign = 'center';
-      let size = 104;
-      ctx.font = `800 ${size}px Inter`;
-      while (size > 64 && ctx.measureText('Design').width > TEX_W - 150) {
-        size -= 4;
-        ctx.font = `800 ${size}px Inter`;
-      }
-      ctx.fillText('Design', TEX_W / 2, TEX_H / 2 + 36);
-      ctx.textAlign = 'left';
-      return;
-    }
-    paintSpread(ctx, page, holes, ink);
-  }
-
-  function paintDynamic(page) {
-    if (!page || !page.dynamic) return;
-    if (page.website) page.website.scroll = reduce ? 0 : page.scroll;
-    if (page.leftDyn && page.leftLive) {
-      const ctx = page.leftLive.getContext('2d');
-      ctx.drawImage(page.left, 0, 0);
-      page.slots.forEach((slot) => {
-        if (slot && slot.page === 'left' && slot.kind === 'video') paintLive(ctx, slot);
-      });
-      if (page.leftTex) page.leftTex.needsUpdate = true;
-    }
-    if (page.rightDyn && page.live) {
-      const ctx = page.live.getContext('2d');
-      ctx.drawImage(page.base, 0, 0);
-      page.slots.forEach((slot) => {
-        if (slot && slot.page === 'right' && slot.kind === 'video') paintLive(ctx, slot);
-      });
-      if (page.visitRect) {
-        const rect = page.visitRect;
-        drawVisitTag(ctx, rect.x, rect.y, rect.w, rect.h);
-      }
-      if (page.rightTex) page.rightTex.needsUpdate = true;
-    }
-  }
-
-  const pendingVideos = [];
-  pages.forEach((page) => page.videos.forEach((entry) => pendingVideos.push(entry.video)));
-  await Promise.all(pendingVideos.map((video) => preloadVideo(video)));
-  pages.forEach((page) => planSpread(page));
-
-  const coverCanvas = document.createElement('canvas');
-  coverCanvas.width = TEX_W;
-  coverCanvas.height = TEX_H;
-  paintBase(coverCanvas, null, 'left');
+  await Promise.all(pages.flatMap((page) => page.videos.map((entry) => preloadVideo(entry.video))));
 
   pages.forEach((page) => {
     page.left = document.createElement('canvas');
     page.left.width = TEX_W;
     page.left.height = TEX_H;
-    paintBase(page.left, page, 'right');
     page.base = document.createElement('canvas');
     page.base.width = TEX_W;
     page.base.height = TEX_H;
-    paintBase(page.base, page, 'left');
+    const leftSpec = page.spread.left || { kind: 'copy', title: page.title };
+    const rightSpec = page.spread.right || { kind: 'copy', title: page.title };
+    if (leftSpec.kind === 'copy') paintCopy(page.left.getContext('2d'), leftSpec, 'left');
+    else paintSpread(page.left.getContext('2d'), leftSpec, page, 'left', images);
+    if (rightSpec.kind === 'copy') paintCopy(page.base.getContext('2d'), rightSpec, 'right');
+    else paintSpread(page.base.getContext('2d'), rightSpec, page, 'right', images);
+    page.leftDyn = page.screens.some((screen) => screen.side === 'left');
+    page.rightDyn = page.screens.some((screen) => screen.side === 'right');
+    page.dynamic = page.leftDyn || page.rightDyn;
     if (page.leftDyn) {
       page.leftLive = document.createElement('canvas');
       page.leftLive.width = TEX_W;
@@ -922,6 +534,22 @@ export async function createDesign(renderer, { reduce, projects }) {
       page.live.getContext('2d').drawImage(page.base, 0, 0);
     }
   });
+
+  function paintDynamic(page) {
+    if (!page || !page.dynamic) return;
+    if (page.leftDyn && page.leftLive) {
+      const ctx = page.leftLive.getContext('2d');
+      ctx.drawImage(page.left, 0, 0);
+      page.screens.forEach((screen) => { if (screen.side === 'left') paintScreen(ctx, screen); });
+      if (page.leftTex) page.leftTex.needsUpdate = true;
+    }
+    if (page.rightDyn && page.live) {
+      const ctx = page.live.getContext('2d');
+      ctx.drawImage(page.base, 0, 0);
+      page.screens.forEach((screen) => { if (screen.side === 'right') paintScreen(ctx, screen); });
+      if (page.rightTex) page.rightTex.needsUpdate = true;
+    }
+  }
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#e8e1d6');
@@ -945,16 +573,14 @@ export async function createDesign(renderer, { reduce, projects }) {
   function paperMaterial(map, side) {
     return new THREE.MeshStandardMaterial({
       map,
-      roughness: 0.9,
+      roughness: 0.92,
       roughnessMap: rough,
       metalness: 0,
-      envMapIntensity: 0.2,
+      envMapIntensity: 0.16,
       side,
-      alphaTest: 0.45,
     });
   }
 
-  const coverTex = makeTexture(coverCanvas, false);
   pages.forEach((page) => {
     page.leftTex = makeTexture(page.leftDyn ? page.leftLive : page.left, page.leftDyn);
     page.rightTex = makeTexture(page.rightDyn ? page.live : page.base, page.rightDyn);
@@ -993,7 +619,7 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   scene.add(new THREE.HemisphereLight(0xf7f1e8, 0xc4b5a4, 0.9));
   scene.add(new THREE.AmbientLight(0xfff6ee, 0.34));
-  const key = new THREE.DirectionalLight(0xfff7ef, 1.55);
+  const key = new THREE.DirectionalLight(0xfff7ef, 1.45);
   key.position.set(-2.4, 3.6, 5.2);
   scene.add(key);
   const fillLight = new THREE.DirectionalLight(0xf3ece3, 0.42);
@@ -1004,67 +630,53 @@ export async function createDesign(renderer, { reduce, projects }) {
   scene.add(rim);
 
   const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.8, 1.9),
+    new THREE.PlaneGeometry(3.1, 2.05),
     new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }),
   );
-  shadow.position.set(0.05, -0.04, -0.5);
+  shadow.position.set(0.02, -0.05, -0.08);
   scene.add(shadow);
 
-  const metal = new THREE.MeshStandardMaterial({
-    color: 0xe4e7ec,
-    metalness: 0.94,
-    roughness: 0.2,
-    envMap: scene.environment,
-    envMapIntensity: 1.35,
-  });
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.018, PAGE_H * 0.72, 0.014), metal);
-  spine.position.z = RING_Z * 0.35;
-  scene.add(spine);
-  const ringGeo = new THREE.TorusGeometry(HOLE_X, 0.012, 20, 56);
-  RING_Y.forEach((y) => {
-    const ring = new THREE.Mesh(ringGeo, metal);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, y, RING_Z);
-    scene.add(ring);
-  });
+  const coverW = (GUTTER + PAGE_W) * 2 + 0.12;
+  const coverH = PAGE_H + 0.11;
+  const boardMat = new THREE.MeshStandardMaterial({ color: 0xddd6cb, roughness: 0.9, metalness: 0 });
+  const coverMat = new THREE.MeshStandardMaterial({ color: 0xe7e1d6, roughness: 0.84, metalness: 0 });
+  const board = new THREE.Mesh(new THREE.ShapeGeometry(roundedShape(coverW + 0.03, coverH + 0.025, 0.055), 8), boardMat);
+  board.position.z = -0.03;
+  const cover = new THREE.Mesh(new THREE.ShapeGeometry(roundedShape(coverW, coverH, 0.05), 8), coverMat);
+  cover.position.z = -0.012;
+  scene.add(board);
+  scene.add(cover);
 
   const stackMat = [0, 1, 2, 3].map((i) => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(CREAM).offsetHSL(0, 0, -0.015 * i),
-    roughness: 0.95,
+    color: new THREE.Color('#e4ded4').offsetHSL(0, 0, -0.012 * i),
+    roughness: 0.96,
     metalness: 0,
   }));
-  const rightStack = [];
-  const leftStack = [];
-  function addStack(sign, list) {
+  function addStack(sign) {
     for (let i = 0; i < 4; i += 1) {
-      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(PAGE_W + 0.008, PAGE_H + 0.01), stackMat[i]);
-      sheet.position.set(
-        sign * (GUTTER + PAGE_W / 2 + 0.0035),
-        -0.0032 * (i + 1),
-        0.008 - 0.0032 * (i + 1),
-      );
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(PAGE_W + 0.01, PAGE_H + 0.008), stackMat[i]);
+      sheet.position.set(sign * (GUTTER + PAGE_W / 2), -0.0035 * (i + 1), 0.006 - 0.0026 * i);
       scene.add(sheet);
-      list.push(sheet);
     }
   }
-  addStack(1, rightStack);
-  addStack(-1, leftStack);
+  addStack(1);
+  addStack(-1);
 
-  const rightMat = paperMaterial(coverTex, THREE.FrontSide);
-  const leftMat = paperMaterial(pages[0] ? pages[0].leftTex : coverTex, THREE.FrontSide);
+  const first = pages[0];
+  const rightMat = paperMaterial(first ? first.rightTex : makeTexture(document.createElement('canvas'), false), THREE.FrontSide);
+  const leftMat = paperMaterial(first ? first.leftTex : rightMat.map, THREE.FrontSide);
   const rightPage = new THREE.Mesh(new THREE.PlaneGeometry(PAGE_W, PAGE_H), rightMat);
-  rightPage.position.set(GUTTER + PAGE_W / 2, 0, 0.014);
+  rightPage.position.set(GUTTER + PAGE_W / 2, 0, 0.016);
   const leftPage = new THREE.Mesh(new THREE.PlaneGeometry(PAGE_W, PAGE_H), leftMat);
-  leftPage.position.set(-(GUTTER + PAGE_W / 2), 0, 0.014);
-  leftPage.visible = false;
+  leftPage.position.set(-(GUTTER + PAGE_W / 2), 0, 0.016);
   scene.add(rightPage);
   scene.add(leftPage);
 
   const curlGeo = new THREE.PlaneGeometry(PAGE_W, PAGE_H, 42, 26);
   curlGeo.translate(GUTTER + PAGE_W / 2, 0, 0);
   const restPos = new Float32Array(curlGeo.attributes.position.array);
-  const frontMat = paperMaterial(coverTex, THREE.FrontSide);
-  const backMat = paperMaterial(coverTex, THREE.BackSide);
+  const frontMat = paperMaterial(first ? first.rightTex : rightMat.map, THREE.FrontSide);
+  const backMat = paperMaterial(first ? first.leftTex : leftMat.map, THREE.BackSide);
   const curlFront = new THREE.Mesh(curlGeo, frontMat);
   const curlBack = new THREE.Mesh(curlGeo, backMat);
   curlFront.frustumCulled = false;
@@ -1079,97 +691,82 @@ export async function createDesign(renderer, { reduce, projects }) {
     const lead = 0.5;
     for (let i = 0; i < pos.count; i += 1) {
       const x = restPos[i * 3];
-      const y = restPos[i * 3 + 1];
+      const yPos = restPos[i * 3 + 1];
       const t = THREE.MathUtils.clamp((x - GUTTER) / PAGE_W, 0, 1);
       const ang = angle + Math.sin(angle) * lead * t * t;
-      pos.setXYZ(i, x * Math.cos(ang), y, x * Math.sin(ang) + 0.028);
+      pos.setXYZ(i, x * Math.cos(ang), yPos, x * Math.sin(ang) + 0.028);
     }
     pos.needsUpdate = true;
     curlGeo.computeVertexNormals();
     curlGeo.computeBoundingSphere();
   }
 
-  const visit = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
-    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
-  );
-  visit.visible = false;
-  visit.position.z = 0.02;
-  rightPage.add(visit);
+  const peakProject = projects.find((project) => project.title === 'Peak') || projects[0];
+  const meqafProject = projects.find((project) => project.title === 'MEQAF') || projects[projects.length - 1];
+  const peakTex = tabTexture(peakProject?.tab || 'Peak Identity', peakProject?.tabColor || '#E0612A', anisotropy);
+  const meqafTex = tabTexture(meqafProject?.tab || 'MEQAF Identity', meqafProject?.tabColor || '#9D0F28', anisotropy);
+  const belowTex = solidTabTexture(peakProject?.tabColor || '#E0612A', anisotropy);
 
-  const tabMargin = PAGE_H * 0.04;
-  const tabCount = Math.max(1, sections.length);
-  const tabSpan = (PAGE_H - tabMargin * 2) / tabCount;
-  const tabH = tabSpan * 0.9;
-  if (document.fonts?.load) {
-    try { await document.fonts.load(`800 ${TAB_FONT}px Inter`); } catch (err) { /* measure with the fallback face */ }
-  }
-  const tabType = tabTypeFor(sections.map((section) => section.label));
-  const innerW = TAB_STICK * 0.84;
-  const innerH = tabH * 0.82;
-  const aspect = tabType.width / tabType.height;
-  let labelW = innerW;
-  let labelH = labelW / aspect;
-  if (labelH > innerH) {
-    labelH = innerH;
-    labelW = labelH * aspect;
-  }
-  const tabW = labelW / 0.84;
-  const tabGeo = tabGeometry(tabW, tabH);
-  const tabs = sections.map((section, i) => {
-    const fg = luminance(section.color) > 0.58 ? INK : '#f6f3ee';
-    const group = new THREE.Group();
-    group.userData.slot = section.first + 1;
-    const body = new THREE.Mesh(
-      tabGeo,
-      new THREE.MeshBasicMaterial({ color: section.color, side: THREE.DoubleSide }),
+  function tabMesh(map, width, height) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }),
     );
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(labelW, labelH),
-      new THREE.MeshBasicMaterial({ map: tabTexture(section.label, fg, tabType), transparent: true, depthWrite: false }),
-    );
-    label.position.z = 0.012;
-    body.renderOrder = 2;
-    label.renderOrder = 3;
-    group.add(body);
-    group.add(label);
-    group.position.y = PAGE_H / 2 - tabMargin - tabSpan * (i + 0.5);
-    scene.add(group);
-    return { group, body, from: 0, to: 0, y: group.position.y, section: i };
-  });
-
-  function tabTarget(sectionIndex, which) {
-    if (which <= 0) return 0;
-    const open = pages[which - 1] ? pages[which - 1].section : 0;
-    return open > sectionIndex ? Math.PI : 0;
+    mesh.renderOrder = 3;
+    scene.add(mesh);
+    return mesh;
   }
 
-  function poseTab(tab, angle) {
-    const outward = Math.cos(angle) >= 0 ? 1 : -1;
-    const edge = GUTTER + PAGE_W;
-    tab.group.position.set(
-      Math.cos(angle) * edge + outward * (tabW / 2),
-      tab.y,
-      Math.sin(angle) * 0.18,
-    );
-    tab.body.scale.x = outward;
+  const mainTab = tabMesh(peakTex, TAB_W, TAB_H);
+  const belowH = TAB_H * 0.46;
+  const belowTab = tabMesh(belowTex, TAB_W, belowH);
+  const rightTab = tabMesh(meqafTex, TAB_W, TAB_H * 0.92);
+  const mainY = PAGE_H * 0.04;
+  const edge = GUTTER + PAGE_W;
+  mainTab.position.set(-edge - TAB_W / 2 + 0.012, mainY, 0.04);
+  belowTab.position.set(-edge - TAB_W / 2 + 0.012, mainY - TAB_H / 2 - belowH * 0.16, 0.036);
+  rightTab.position.set(edge + TAB_W / 2 - 0.012, PAGE_H * 0.16, 0.04);
+
+  function firstSlot(title) {
+    const index = pages.findIndex((page) => page.title === title);
+    return index < 0 ? 1 : index + 1;
   }
 
-  function poseTabs(t) {
-    tabs.forEach((tab) => poseTab(tab, tab.from + (tab.to - tab.from) * t));
+  function layoutTabs(which, hideRight) {
+    const page = pages[which - 1];
+    if (!page) return;
+    const project = page.project;
+    const mine = project.title === 'MEQAF' ? meqafTex : peakTex;
+    mainTab.material.map = mine;
+    mainTab.material.needsUpdate = true;
+    mainTab.userData.slot = firstSlot(project.title);
+    if (project.peekBelow) {
+      belowTab.visible = true;
+      belowTab.userData.slot = firstSlot(project.peekBelow.opens);
+    } else {
+      belowTab.visible = false;
+      belowTab.userData.slot = 0;
+    }
+    if (!hideRight && project.peekRight) {
+      rightTab.visible = true;
+      rightTab.material.map = meqafTex;
+      rightTab.material.needsUpdate = true;
+      rightTab.userData.slot = firstSlot(project.peekRight.opens);
+    } else {
+      rightTab.visible = false;
+      rightTab.userData.slot = 0;
+    }
   }
 
   function texRight(which) {
-    if (which <= 0) return coverTex;
-    return pages[which - 1].rightTex;
+    return pages[which - 1] ? pages[which - 1].rightTex : rightMat.map;
   }
 
   function texLeft(which) {
-    if (which <= 0) return null;
-    return pages[which - 1].leftTex;
+    return pages[which - 1] ? pages[which - 1].leftTex : leftMat.map;
   }
 
-  let slot = 0;
+  let slot = 1;
   let turning = false;
   let turn = null;
   let suspended = false;
@@ -1192,42 +789,16 @@ export async function createDesign(renderer, { reduce, projects }) {
     renderer.toneMappingExposure = gradeSaved.exposure;
   }
 
-  function placeVisit(which) {
-    const page = which > 0 ? pages[which - 1] : null;
-    if (!page || !page.visitRect || !page.website || !page.website.href) {
-      visit.visible = false;
-      visit.userData.href = '';
-      return;
-    }
-    const rect = page.visitRect;
-    const u = (rect.x + rect.w / 2) / TEX_W;
-    const v = (rect.y + rect.h / 2) / TEX_H;
-    visit.position.set((u - 0.5) * PAGE_W, (0.5 - v) * PAGE_H, 0.02);
-    visit.scale.set((rect.w / TEX_W) * PAGE_W * 1.12, (rect.h / TEX_H) * PAGE_H * 1.35, 1);
-    visit.userData.href = page.website.href;
-    visit.visible = true;
-  }
-
   function applyRest(which) {
-    rightMat.map = texRight(which);
+    const open = Math.min(pages.length, Math.max(1, which));
+    rightMat.map = texRight(open);
+    leftMat.map = texLeft(open);
     rightMat.needsUpdate = true;
-    if (which <= 0) {
-      leftPage.visible = false;
-    } else {
-      leftPage.visible = true;
-      leftMat.map = texLeft(which);
-      leftMat.needsUpdate = true;
-    }
+    leftMat.needsUpdate = true;
+    leftPage.visible = true;
     curlFront.visible = false;
     curlBack.visible = false;
-    leftStack.forEach((sheet) => { sheet.visible = which > 0; });
-    placeVisit(which);
-    tabs.forEach((tab) => {
-      const angle = tabTarget(tab.section, which);
-      tab.from = angle;
-      tab.to = angle;
-      poseTab(tab, angle);
-    });
+    layoutTabs(open, false);
   }
 
   function showCurl(on) {
@@ -1247,42 +818,31 @@ export async function createDesign(renderer, { reduce, projects }) {
     };
     if (dir > 0) {
       frontMat.map = texRight(from);
-      backMat.map = flipped(texLeft(to) || coverTex);
+      backMat.map = flipped(texLeft(to));
       rightMat.map = texRight(to);
-      if (from <= 0) leftPage.visible = false;
-      else {
-        leftPage.visible = true;
-        leftMat.map = texLeft(from);
-      }
+      leftMat.map = texLeft(from);
     } else {
       frontMat.map = texRight(to);
-      backMat.map = flipped(texLeft(from) || texRight(from));
+      backMat.map = flipped(texLeft(from));
       rightMat.map = texRight(from);
-      if (to <= 0) leftPage.visible = false;
-      else {
-        leftPage.visible = true;
-        leftMat.map = texLeft(to);
-      }
+      leftMat.map = texLeft(to);
     }
     frontMat.needsUpdate = true;
     backMat.needsUpdate = true;
     rightMat.needsUpdate = true;
     leftMat.needsUpdate = true;
-    visit.visible = false;
-    if (from > 0) paintDynamic(pages[from - 1]);
-    if (to > 0) paintDynamic(pages[to - 1]);
+    leftPage.visible = true;
+    paintDynamic(pages[from - 1]);
+    paintDynamic(pages[to - 1]);
     showCurl(true);
     deform(turn.fromAngle);
-    tabs.forEach((tab) => {
-      tab.from = tabTarget(tab.section, from);
-      tab.to = tabTarget(tab.section, to);
-    });
+    layoutTabs(dir > 0 ? from : to, true);
     turning = true;
   }
 
   function direction(from, to) {
-    if (to === 0) return -1;
-    if (from === 0) return 1;
+    if (from === pages.length && to === 1) return 1;
+    if (from === 1 && to === pages.length) return -1;
     return to > from ? 1 : -1;
   }
 
@@ -1297,7 +857,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     return { top, bottom };
   }
 
-  function computePose(which) {
+  function computePose() {
     const narrow = narrowNow();
     const aspect = viewW / Math.max(1, viewH);
     const fov = narrow ? 30 : 28;
@@ -1306,28 +866,15 @@ export async function createDesign(renderer, { reduce, projects }) {
     const tanH = tanV * aspect;
     const { top, bottom } = margins();
     const usable = Math.max(0.42, 1 - top - bottom);
-    let halfW;
-    let halfH;
-    let focusX;
-    const focusY = 0;
-    if (which === 0) {
-      const left = -HOLE_X - 0.02;
-      const right = GUTTER + PAGE_W + tabW + 0.04;
-      halfW = (right - left) / 2;
-      halfH = PAGE_H / 2 + 0.04;
-      focusX = (left + right) / 2;
-    } else {
-      halfW = GUTTER + PAGE_W + tabW + (narrow ? 0.04 : 0.05);
-      halfH = PAGE_H / 2 + 0.04;
-      focusX = 0;
-    }
+    const halfW = GUTTER + PAGE_W + TAB_W + (narrow ? 0.035 : 0.05);
+    const halfH = PAGE_H / 2 + 0.05;
     const distV = halfH / (tanV * usable * 0.93);
     const distH = halfW / (tanH * (narrow ? 0.98 : 0.93));
     const dist = Math.max(distV, distH) * (narrow ? 1.0 : 1.04);
     const topLimit = 1 - 2 * top;
     const botLimit = -1 + 2 * bottom;
     const safeCenter = (topLimit + botLimit) / 2;
-    const look = new THREE.Vector3(focusX, focusY - dist * tanV * safeCenter, 0);
+    const look = new THREE.Vector3(0, 0 - dist * tanV * safeCenter, 0);
     const ox = narrow ? 0 : 0.2;
     const oy = narrow ? 0.02 : 0.16;
     const pos = new THREE.Vector3(look.x + ox, look.y + oy, dist);
@@ -1341,8 +888,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     camera.updateMatrixWorld();
   }
 
-  function moveCamera(which, snap) {
-    const pose = computePose(which);
+  function moveCamera(snap) {
+    const pose = computePose();
     camTo.copy(pose.pos);
     lookTo.copy(pose.look);
     fovTo = pose.fov;
@@ -1373,19 +920,25 @@ export async function createDesign(renderer, { reduce, projects }) {
         if (on) {
           const pending = entry.video.play();
           if (pending && pending.catch) pending.catch(() => {});
-        } else {
-          entry.video.pause();
-        }
+        } else entry.video.pause();
       });
     });
   }
 
+  function wrap(next) {
+    const count = Math.max(1, pages.length);
+    let dest = next;
+    while (dest < 1) dest += count;
+    while (dest > count) dest -= count;
+    return dest;
+  }
+
   function aim(next, snap) {
-    const count = pages.length + 1;
-    const dest = ((next % count) + count) % count;
+    if (!pages.length) return;
+    const dest = wrap(next);
     const from = slot;
     if (dest === from) {
-      if (!turning) moveCamera(dest, snap);
+      if (!turning) moveCamera(snap);
       return;
     }
     if (turning && !snap && !reduce) applyRest(from);
@@ -1395,17 +948,18 @@ export async function createDesign(renderer, { reduce, projects }) {
       turning = false;
       turn = null;
       applyRest(dest);
-      moveCamera(dest, true);
+      moveCamera(true);
       syncMedia();
       return;
     }
     startTurn(from, dest, dir);
-    moveCamera(dest, false);
+    moveCamera(false);
     syncMedia();
   }
 
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
+  const tabMeshes = [mainTab, belowTab, rightTab];
 
   function pointerNDC(e) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -1413,25 +967,12 @@ export async function createDesign(renderer, { reduce, projects }) {
     ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  function visitAt(e) {
-    if (!visit.visible || !visit.userData.href) return null;
-    pointerNDC(e);
-    raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObject(visit, false);
-    return hits.length ? visit : null;
-  }
-
   function tabAt(e) {
     pointerNDC(e);
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(tabs.map((tab) => tab.group), true);
+    const hits = raycaster.intersectObjects(tabMeshes.filter((mesh) => mesh.visible), false);
     if (!hits.length) return 0;
-    let node = hits[0].object;
-    while (node) {
-      if (node.userData && node.userData.slot) return node.userData.slot;
-      node = node.parent;
-    }
-    return 0;
+    return hits[0].object.userData.slot || 0;
   }
 
   function resize(w, h) {
@@ -1439,7 +980,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     viewH = h;
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
-    moveCamera(slot, !camAnimating);
+    moveCamera(!camAnimating);
   }
 
   function update(dt, now) {
@@ -1459,19 +1000,22 @@ export async function createDesign(renderer, { reduce, projects }) {
       const t = Math.min(1, turn.elapsed / turn.dur);
       const e = easeInOut(t);
       deform(turn.fromAngle + (turn.toAngle - turn.fromAngle) * e);
-      poseTabs(e);
       if (t >= 1) {
         turning = false;
         applyRest(slot);
       }
     }
-    const active = slot > 0 ? pages[slot - 1] : null;
-    if (active && active.website && !reduce && !suspended) active.scroll += dt * 42;
-    if (active && active.dynamic) paintDynamic(active);
-    if (turning && turn && turn.from > 0) {
-      const previous = pages[turn.from - 1];
-      if (previous && previous.dynamic && previous !== active) paintDynamic(previous);
-    }
+    const refresh = (page) => {
+      if (!page || !page.dynamic) return;
+      paintDynamic(page);
+      [page.leftTex, page.rightTex].forEach((tex) => {
+        const copy = tex && flipCache.get(tex);
+        if (copy) copy.needsUpdate = true;
+      });
+    };
+    const active = pages[slot - 1];
+    refresh(active);
+    if (turning && turn && turn.from > 0 && pages[turn.from - 1] !== active) refresh(pages[turn.from - 1]);
   }
 
   function step(dir) {
@@ -1481,11 +1025,6 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function pointerDown(e) {
-    const hit = visitAt(e);
-    if (hit) {
-      window.open(hit.userData.href, '_blank', 'noopener,noreferrer');
-      return true;
-    }
     const next = tabAt(e);
     if (next) {
       aim(next, reduce);
@@ -1495,8 +1034,7 @@ export async function createDesign(renderer, { reduce, projects }) {
   }
 
   function pointerMove(e) {
-    const hit = visitAt(e) || tabAt(e);
-    renderer.domElement.style.cursor = hit ? 'pointer' : '';
+    renderer.domElement.style.cursor = tabAt(e) ? 'pointer' : '';
   }
 
   function pause() {
@@ -1517,8 +1055,9 @@ export async function createDesign(renderer, { reduce, projects }) {
     gl.render(scene, camera);
   }
 
-  applyRest(0);
-  aim(0, true);
+  applyRest(1);
+  moveCamera(true);
+  syncMedia();
 
   return {
     scene,
@@ -1534,8 +1073,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     nav: () => ({
       index: slot - 1,
       total: pages.length,
-      label: slot > 0 ? (pages[slot - 1].title || '') : '',
-      project: slot > 0 ? pages[slot - 1].project : null,
+      label: pages[slot - 1] ? pages[slot - 1].title : '',
+      project: pages[slot - 1] ? pages[slot - 1].project : null,
     }),
   };
 }
