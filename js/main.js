@@ -231,6 +231,7 @@ function applyChrome() {
   const isAbout = current === 'about';
   aboutEl.hidden = !isAbout;
   canvas.style.visibility = isAbout ? 'hidden' : 'visible';
+  view.ceramics?.setTonesVisible?.(current === 'ceramics');
   if (current !== 'ceramics') hideCards();
   else {
     const info = active.nav();

@@ -6,9 +6,10 @@ import { ARTIST } from './projects.js';
 // 00 is the closed cover. Each later number is one project, in category
 // order. Only the first project of a category has a divider tab, labelled
 // with that category in one horizontal size. A two-word label wraps so the
-// tab only sticks out a short way past the page. Every spread uses the Meqaf
-// binder grid. A sheet uses the project's brand colour when one is known.
-// The page turns around the rings.
+// tab only sticks out a short way past the page. Every page is the cover
+// white. Only the tab is coloured, and the type on the page uses that colour.
+// Each spread is filled with that project's own images, videos and text.
+// A video keeps its own aspect ratio. The page turns around the rings.
 
 const TEX_W = 720;
 const TEX_H = 992;
@@ -212,7 +213,7 @@ function punch(ctx, side) {
 function drawRules(ctx, header, footer, holes, ink) {
   const leftX = holes === 'left' ? 98 : 42;
   const rightX = holes === 'right' ? TEX_W - 98 : TEX_W - 42;
-  const light = ink !== INK;
+  const light = luminance(ink) > 0.7;
   ctx.save();
   ctx.strokeStyle = light ? 'rgba(246,241,230,0.72)' : 'rgba(22,18,14,0.55)';
   ctx.lineWidth = 1.25;
@@ -263,6 +264,42 @@ function contentBox(holes) {
 
 function sheetInk(fill) {
   return luminance(fill) > 0.68 ? INK : '#f6f1e6';
+}
+
+function inkOf(hex) {
+  const color = new THREE.Color(hex || INK);
+  const hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  if (hsl.s < 0.28) hsl.s = 0.42;
+  if (hsl.l > 0.4) hsl.l = 0.36;
+  return `#${new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s), hsl.l).getHexString()}`;
+}
+
+function aspectOf(slot) {
+  const video = slot && slot.video;
+  if (slot && slot.kind === 'video' && video && video.videoWidth && video.videoHeight) {
+    return video.videoWidth / video.videoHeight;
+  }
+  const img = slot && (slot.poster || slot.image);
+  const w = img ? (img.naturalWidth || img.videoWidth || img.width) : 1;
+  const h = img ? (img.naturalHeight || img.videoHeight || img.height) : 1;
+  if (!w || !h) return 1;
+  return w / h;
+}
+
+function preloadVideo(video) {
+  return new Promise((resolve) => {
+    if (!video) { resolve(); return; }
+    if (video.readyState >= 2) { resolve(); return; }
+    const done = () => {
+      video.removeEventListener('loadeddata', done);
+      video.removeEventListener('error', done);
+      resolve();
+    };
+    video.addEventListener('loadeddata', done);
+    video.addEventListener('error', done);
+    setTimeout(done, 2500);
+  });
 }
 
 function traceRound(ctx, x, y, w, h, r) {
@@ -336,7 +373,7 @@ function paintLive(ctx, slot) {
     ctx.drawImage(image, 0, sy, sw, srcH, x, y, w, h);
   } else if (slot.kind === 'video') {
     const frame = slot.video && slot.video.readyState >= 2 ? slot.video : (slot.poster || slot.image);
-    if (frame) coverImage(ctx, frame, x, y, w, h);
+    if (frame) drawContain(ctx, frame, x, y, w, h);
   }
   ctx.restore();
 }
@@ -580,11 +617,11 @@ export async function createDesign(renderer, { reduce, projects }) {
   const pages = ordered.map((project, index) => {
     const num = String(index + 1).padStart(2, '0');
     const raw = project.slots || [];
-    const slots = Array.from({ length: 10 }, (_, i) => mediaSlot(raw[i]));
+    const slots = raw.map((item) => mediaSlot(item)).filter(Boolean);
     const videos = slots.filter((slot) => slot && slot.kind === 'video');
     const website = slots.find((slot) => slot && slot.kind === 'website') || null;
-    const leftDyn = slots.slice(0, 6).some((slot) => slot && slot.kind === 'video');
-    const rightDyn = slots.slice(6).some((slot) => slot && (slot.kind === 'video' || slot.kind === 'website'));
+    const leftDyn = false;
+    const rightDyn = false;
     return {
       project,
       index,
@@ -595,8 +632,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       text: project.text || '',
       label: project.label || project.category || '',
       year: project.year || '',
-      rightTitle: project.rightTitle || project.title || '',
-      rightText: project.rightText != null ? project.rightText : (project.text || ''),
+      rightTitle: project.rightTitle || '',
+      rightText: project.rightText || '',
       swatches: project.swatches || [],
       slots,
       videos,
@@ -625,7 +662,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     const section = sections[sections.length - 1];
     page.section = sections.length - 1;
     page.color = section.color;
-    page.fill = page.project.sheet || mixHex(section.color, '#f6f3ec', 0.12);
+    page.fill = CREAM;
+    page.ink = inkOf(section.color);
   });
 
   const nameFooter = coverFooter();
@@ -637,109 +675,176 @@ export async function createDesign(renderer, { reduce, projects }) {
     return [bits, '', ''];
   }
 
-  function paintLeft(ctx, page, box, ink) {
-    const gap = Math.max(12, Math.round(box.w / 40));
-    const top = 76;
-    const bottom = TEX_H - 72;
-    const logoW = Math.round(box.w * 0.4);
-    const bandH = Math.min(logoW, Math.round((bottom - top) * 0.34));
-    drawTile(ctx, page.slots[0], box.x, top, logoW, bandH);
-    const tx = box.x + logoW + gap;
-    const tw = Math.max(40, box.x + box.w - tx);
-    ctx.fillStyle = ink;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    let ty = top + 2;
-    if (page.label) {
-      ctx.font = '600 15px Inter, "Noto Naskh Arabic", sans-serif';
-      fillTracked(ctx, String(page.label).toUpperCase(), tx, ty + 10, 'left', 2.1);
-      ty += 32;
+  function planSpread(page) {
+    const items = page.slots.map((slot) => ({ slot, aspect: Math.max(0.2, aspectOf(slot)) }));
+    const sites = items.filter((item) => item.slot.kind === 'website');
+    const rest = items.filter((item) => item.slot.kind !== 'website');
+    const left = [];
+    const right = [];
+    if (!rest.length) {
+      right.push(...sites);
+    } else if (rest.length === 1 && !sites.length) {
+      right.push(rest[0]);
+    } else {
+      const leftCount = Math.max(1, Math.ceil(rest.length / 2));
+      left.push(...rest.slice(0, leftCount));
+      right.push(...rest.slice(leftCount), ...sites);
     }
-    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
-    let size = 52;
-    ctx.font = `800 ${size}px ${face}`;
-    let lines = wrapLines(ctx, String(page.title || '').toUpperCase(), tw);
-    while (size > 28 && lines.length > 2) {
-      size -= 2;
-      ctx.font = `800 ${size}px ${face}`;
-      lines = wrapLines(ctx, String(page.title || '').toUpperCase(), tw);
-    }
-    lines.slice(0, 2).forEach((line) => {
-      ctx.fillText(line, tx, ty);
-      ty += size * 0.98;
-    });
-    ty += 10;
-    if (page.text) {
-      ctx.font = `400 18px ${face}`;
-      wrapLines(ctx, page.text, tw).slice(0, 4).forEach((line) => {
-        ctx.fillText(line, tx, ty);
-        ty += 24;
-      });
-    }
-    const rowsTop = top + bandH + gap;
-    const rowH = Math.floor((bottom - rowsTop - gap) / 2);
-    const trioW = Math.floor((box.w - gap * 2) / 3);
-    for (let i = 0; i < 3; i += 1) {
-      drawTile(ctx, page.slots[1 + i], box.x + i * (trioW + gap), rowsTop, trioW, rowH);
-    }
-    const square = Math.min(rowH, Math.floor(box.w * 0.42));
-    const wide = box.w - square - gap;
-    const by = rowsTop + rowH + gap;
-    drawTile(ctx, page.slots[4], box.x, by, square, rowH);
-    drawTile(ctx, page.slots[5], box.x + square + gap, by, wide, rowH);
+    left.forEach((item) => { item.slot.page = 'left'; });
+    right.forEach((item) => { item.slot.page = 'right'; });
+    page.plan = { left, right };
+    page.leftDyn = left.some((item) => item.slot.kind === 'video');
+    page.rightDyn = right.some((item) => item.slot.kind === 'video');
+    page.dynamic = page.leftDyn || page.rightDyn;
   }
 
-  function paintRight(ctx, page, box, ink) {
-    const gap = Math.max(12, Math.round(box.w / 40));
-    const top = 76;
-    const bottom = TEX_H - 72;
+  function drawCopy(ctx, page, x, y, w, ink, roomy) {
     const face = 'Inter, "Noto Naskh Arabic", sans-serif';
     ctx.fillStyle = ink;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
-    let y = top;
-    if (page.rightTitle) {
-      let size = 40;
+    let cursor = y;
+    if (page.label) {
+      ctx.font = '600 15px Inter, "Noto Naskh Arabic", sans-serif';
+      fillTracked(ctx, String(page.label).toUpperCase(), x, cursor + 12, 'left', 2.2);
+      cursor += 36;
+    }
+    const title = String(page.title || '');
+    if (title) {
+      let size = roomy ? 64 : 40;
       ctx.font = `800 ${size}px ${face}`;
-      let lines = wrapLines(ctx, page.rightTitle, box.w);
-      while (size > 26 && lines.length > 2) {
+      let lines = wrapLines(ctx, title, w);
+      const cap = roomy ? 4 : 2;
+      while (size > 26 && lines.length > cap) {
         size -= 2;
         ctx.font = `800 ${size}px ${face}`;
-        lines = wrapLines(ctx, page.rightTitle, box.w);
+        lines = wrapLines(ctx, title, w);
+      }
+      lines.slice(0, cap).forEach((line) => {
+        ctx.fillText(line, x, cursor);
+        cursor += size * 1.02;
+      });
+      cursor += 12;
+    }
+    if (page.text) {
+      ctx.font = `400 ${roomy ? 22 : 18}px ${face}`;
+      const lead = roomy ? 30 : 24;
+      wrapLines(ctx, page.text, w).slice(0, roomy ? 8 : 4).forEach((line) => {
+        ctx.fillText(line, x, cursor);
+        cursor += lead;
+      });
+      cursor += 8;
+    }
+    if (page.swatches.length) cursor += drawSwatches(ctx, page.swatches, x, cursor, w, ink) + 16;
+    return cursor;
+  }
+
+  function drawNote(ctx, page, x, y, w, ink) {
+    const face = 'Inter, "Noto Naskh Arabic", sans-serif';
+    ctx.fillStyle = ink;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    let cursor = y;
+    if (page.rightTitle) {
+      let size = 32;
+      ctx.font = `800 ${size}px ${face}`;
+      let lines = wrapLines(ctx, page.rightTitle, w);
+      while (size > 22 && lines.length > 2) {
+        size -= 2;
+        ctx.font = `800 ${size}px ${face}`;
+        lines = wrapLines(ctx, page.rightTitle, w);
       }
       lines.slice(0, 2).forEach((line) => {
-        ctx.fillText(line, box.x, y);
-        y += size * 1.05;
+        ctx.fillText(line, x, cursor);
+        cursor += size * 1.05;
       });
-      y += 8;
+      cursor += 8;
     }
     if (page.rightText) {
       ctx.font = `400 18px ${face}`;
-      wrapLines(ctx, page.rightText, box.w).slice(0, 3).forEach((line) => {
-        ctx.fillText(line, box.x, y);
-        y += 24;
+      wrapLines(ctx, page.rightText, w).slice(0, 4).forEach((line) => {
+        ctx.fillText(line, x, cursor);
+        cursor += 24;
       });
-      y += 12;
+      cursor += 12;
     }
-    if (page.swatches.length) {
-      y += drawSwatches(ctx, page.swatches, box.x, y, box.w, ink) + 14;
+    return cursor;
+  }
+
+  function placeMedia(ctx, item, x, y, w, h, page, side) {
+    if (w < 8 || h < 8) return;
+    const slot = item.slot;
+    const r = Math.max(8, Math.min(16, Math.round(Math.min(w, h) * 0.045)));
+    const frame = slot.poster || slot.image;
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,16,12,0.22)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    traceRound(ctx, x, y, w, h, r);
+    ctx.fillStyle = '#fffdf8';
+    ctx.fill();
+    ctx.restore();
+    if (frame) {
+      ctx.save();
+      traceRound(ctx, x, y, w, h, r);
+      ctx.clip();
+      drawContain(ctx, frame, x, y, w, h);
+      ctx.restore();
     }
-    const cellW = Math.floor((box.w - gap) / 2);
-    const cellH = Math.max(40, Math.floor((bottom - y - gap) / 2));
-    page.visitRect = null;
-    for (let i = 0; i < 4; i += 1) {
-      const slot = page.slots[6 + i];
-      const x = box.x + (i % 2) * (cellW + gap);
-      const yy = y + Math.floor(i / 2) * (cellH + gap);
-      drawTile(ctx, slot, x, yy, cellW, cellH);
-      if (slot && slot.kind === 'website') slot.scroll = page.scroll;
-      if (slot && slot.kind === 'website' && slot.href) {
-        const bw = Math.min(168, cellW - 20);
-        const bh = 32;
-        page.visitRect = { x: x + 10, y: yy + cellH - bh - 10, w: bw, h: bh };
-        drawVisitTag(ctx, page.visitRect.x, page.visitRect.y, bw, bh);
-      }
+    slot.rect = { x, y, w, h, r };
+    slot.page = side;
+    if (side === 'right' && slot.kind === 'website' && slot.href) {
+      const bw = Math.min(168, w - 20);
+      const bh = 32;
+      page.visitRect = { x: x + 10, y: y + h - bh - 10, w: bw, h: bh };
+      drawVisitTag(ctx, page.visitRect.x, page.visitRect.y, bw, bh);
     }
+  }
+
+  function packMedia(ctx, items, area, page, side) {
+    if (!items.length || area.h < 24 || area.w < 24) return;
+    const gap = 14;
+    if (items.length === 1) {
+      placeMedia(ctx, items[0], area.x, area.y, area.w, area.h, page, side);
+      return;
+    }
+    const rows = items.length <= 2 ? 1 : items.length <= 5 ? 2 : items.length <= 9 ? 3 : 4;
+    const per = Math.ceil(items.length / rows);
+    const groups = [];
+    for (let i = 0; i < items.length; i += per) groups.push(items.slice(i, i + per));
+    const naturals = groups.map((group) => {
+      const sum = group.reduce((total, item) => total + item.aspect, 0);
+      return (area.w - gap * (group.length - 1)) / Math.max(0.01, sum);
+    });
+    const sumH = naturals.reduce((total, value) => total + value, 0);
+    const avail = area.h - gap * (groups.length - 1);
+    const scale = Math.min(1, avail / Math.max(1, sumH));
+    const used = sumH * scale + gap * (groups.length - 1);
+    let y = area.y + Math.max(0, (area.h - used) / 2);
+    groups.forEach((group, index) => {
+      const h = naturals[index] * scale;
+      let x = area.x;
+      group.forEach((item) => {
+        const w = h * item.aspect;
+        placeMedia(ctx, item, x, y, w, h, page, side);
+        x += w + gap;
+      });
+      y += h + gap;
+    });
+  }
+
+  function paintSpread(ctx, page, holes, ink) {
+    const box = contentBox(holes);
+    const side = holes === 'right' ? 'left' : 'right';
+    const items = page.plan ? page.plan[side] : [];
+    const top = 76;
+    const bottom = TEX_H - 72;
+    let y = top;
+    const roomy = side === 'left' && !items.length;
+    if (side === 'left') y = drawCopy(ctx, page, box.x, y, box.w, ink, roomy);
+    else if (page.rightTitle || page.rightText) y = drawNote(ctx, page, box.x, y, box.w, ink);
+    if (side === 'right') page.visitRect = null;
+    packMedia(ctx, items, { x: box.x, y, w: box.w, h: Math.max(40, bottom - y) }, page, side);
   }
 
   function paintBase(canvas, page, holes) {
@@ -747,7 +852,7 @@ export async function createDesign(renderer, { reduce, projects }) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     const fill = page ? page.fill : CREAM;
-    const ink = page ? sheetInk(fill) : INK;
+    const ink = page ? (page.ink || inkOf(page.color)) : INK;
     const footer = page ? footerParts(page.title, page.year, page.num) : nameFooter;
     drawSheet(ctx, { fill, header: runningHeader(page, holes), footer, holes, ink });
     if (!page) {
@@ -766,9 +871,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       ctx.textAlign = 'left';
       return;
     }
-    const box = contentBox(holes);
-    if (holes === 'right') paintLeft(ctx, page, box, ink);
-    else paintRight(ctx, page, box, ink);
+    paintSpread(ctx, page, holes, ink);
   }
 
   function paintDynamic(page) {
@@ -777,16 +880,16 @@ export async function createDesign(renderer, { reduce, projects }) {
     if (page.leftDyn && page.leftLive) {
       const ctx = page.leftLive.getContext('2d');
       ctx.drawImage(page.left, 0, 0);
-      page.slots.slice(0, 6).forEach((slot) => {
-        if (slot && slot.kind === 'video') paintLive(ctx, slot);
+      page.slots.forEach((slot) => {
+        if (slot && slot.page === 'left' && slot.kind === 'video') paintLive(ctx, slot);
       });
       if (page.leftTex) page.leftTex.needsUpdate = true;
     }
     if (page.rightDyn && page.live) {
       const ctx = page.live.getContext('2d');
       ctx.drawImage(page.base, 0, 0);
-      page.slots.slice(6).forEach((slot) => {
-        if (slot && (slot.kind === 'video' || slot.kind === 'website')) paintLive(ctx, slot);
+      page.slots.forEach((slot) => {
+        if (slot && slot.page === 'right' && slot.kind === 'video') paintLive(ctx, slot);
       });
       if (page.visitRect) {
         const rect = page.visitRect;
@@ -795,6 +898,11 @@ export async function createDesign(renderer, { reduce, projects }) {
       if (page.rightTex) page.rightTex.needsUpdate = true;
     }
   }
+
+  const pendingVideos = [];
+  pages.forEach((page) => page.videos.forEach((entry) => pendingVideos.push(entry.video)));
+  await Promise.all(pendingVideos.map((video) => preloadVideo(video)));
+  pages.forEach((page) => planSpread(page));
 
   const coverCanvas = document.createElement('canvas');
   coverCanvas.width = TEX_W;
@@ -985,7 +1093,7 @@ export async function createDesign(renderer, { reduce, projects }) {
       const y = restPos[i * 3 + 1];
       const t = THREE.MathUtils.clamp((x - GUTTER) / PAGE_W, 0, 1);
       const ang = angle + Math.sin(angle) * lead * t * t;
-      pos.setXYZ(i, x * Math.cos(ang), y, x * Math.sin(ang) + 0.008);
+      pos.setXYZ(i, x * Math.cos(ang), y, x * Math.sin(ang) + 0.028);
     }
     pos.needsUpdate = true;
     curlGeo.computeVertexNormals();
@@ -1145,8 +1253,8 @@ export async function createDesign(renderer, { reduce, projects }) {
       dir,
       fromAngle: dir > 0 ? 0 : Math.PI,
       toAngle: dir > 0 ? Math.PI : 0,
-      start: performance.now(),
-      dur: 1080,
+      elapsed: 0,
+      dur: 1.08,
     };
     if (dir > 0) {
       frontMat.map = texRight(from);
@@ -1172,6 +1280,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     rightMat.needsUpdate = true;
     leftMat.needsUpdate = true;
     visit.visible = false;
+    if (from > 0) paintDynamic(pages[from - 1]);
+    if (to > 0) paintDynamic(pages[to - 1]);
     showCurl(true);
     deform(turn.fromAngle);
     tabs.forEach((tab) => {
@@ -1356,7 +1466,8 @@ export async function createDesign(renderer, { reduce, projects }) {
     }
     applyCamera();
     if (turning && turn) {
-      const t = Math.min(1, (now - turn.start) / turn.dur);
+      turn.elapsed += dt;
+      const t = Math.min(1, turn.elapsed / turn.dur);
       const e = easeInOut(t);
       deform(turn.fromAngle + (turn.toAngle - turn.fromAngle) * e);
       poseTabs(e);

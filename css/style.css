@@ -57,6 +57,10 @@ a{color:inherit}
 .counter{font-family:var(--serif);font-size:40px;line-height:1;display:flex;gap:8px;align-items:baseline}
 .counter .sep,#cTot{font-size:18px;color:var(--ink2)}
 .hud-title{order:-1;width:100%;text-align:center;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2)}
+#clayTones{position:fixed;left:28px;bottom:92px;z-index:24;display:flex;gap:8px;align-items:center}
+#clayTones[hidden]{display:none}
+#clayTones button{width:22px;height:22px;padding:0;border-radius:50%;border:2px solid rgba(28,25,22,.35);background:#c4b09a center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+#clayTones button.on{border-color:#1c1916;box-shadow:0 0 0 2px #f3f0e6, 0 0 0 3.5px #1c1916}
 .steps{display:flex;gap:8px}
 .steps button{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;font-size:14px;background:rgba(243,238,230,.72);transition:background .3s,color .3s}
 .steps button:hover{background:var(--ink);color:var(--bone)}
@@ -110,6 +114,7 @@ a{color:inherit}
   #designLabel .board-photos img:nth-child(n){max-height:10vh;max-width:18%;margin-top:0}
   .board-label{font-size:8px;letter-spacing:.12em}
   .hud{bottom:86px}
+  #clayTones{left:16px;bottom:128px}
   .page-link{bottom:22px;font-size:18px}
   .page-prev{left:16px}
   .page-next{right:16px}
