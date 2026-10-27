@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { loadImage, roomTexture, textureFromImage } from './media.js';
 
 // Art is a gallery wall. 00 is the whole room, pulled back far enough that
 // the tops of the pieces stay in frame. Each later number glides to one work.
 // The label is printed in the room. A line is omitted when the piece has no
-// data for it. The sculpture label sits beside the plinth.
+// data for it. A piece with a photograph hangs in the same wood frame as the
+// prints. makeTower and makePendant stay available for a later scan.
 
 function towerGrain() {
   const canvas = document.createElement('canvas');
@@ -178,19 +179,16 @@ function makePendant(x) {
   return group;
 }
 
-function loadTex(url, renderer) {
-  return new Promise((resolve) => {
-    if (!url) { resolve(null); return; }
-    const loader = new THREE.TextureLoader();
-    loader.load(url, (t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      t.magFilter = THREE.LinearFilter;
-      t.minFilter = THREE.LinearMipmapLinearFilter;
-      t.generateMipmaps = true;
-      resolve(t);
-    }, undefined, () => resolve(null));
-  });
+export const sculptureBuilders = { tower: makeTower, pendant: makePendant };
+
+async function loadTex(url, renderer) {
+  const img = await loadImage(url);
+  if (!img) return null;
+  const aspect = (img.naturalWidth || img.width) / (img.naturalHeight || img.height || 1);
+  return {
+    tex: textureFromImage(img, renderer, { colorSpace: THREE.SRGBColorSpace }),
+    aspect,
+  };
 }
 
 function wrapLines(g, text, x, y, maxW, lineH, maxLines) {
@@ -312,7 +310,18 @@ function poolTexture() {
   return tex;
 }
 
-function addWoodFrame(scene, x, y, w, h, mat) {
+const frameBoxes = new Map();
+function frameBox(w, h, d) {
+  const key = `${w}|${h}|${d}`;
+  let geo = frameBoxes.get(key);
+  if (!geo) {
+    geo = new THREE.BoxGeometry(w, h, d);
+    frameBoxes.set(key, geo);
+  }
+  return geo;
+}
+
+function addWoodFrame(scene, x, y, w, h, mat, beadMat, lipMat) {
   const group = new THREE.Group();
   const depth = 0.1;
   const mould = 0.11;
@@ -323,13 +332,11 @@ function addWoodFrame(scene, x, y, w, h, mat) {
     [w / 2 - mould / 2, 0, mould, h - mould * 2],
   ];
   bars.forEach(([bx, by, bw, bh]) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth), mat);
+    const mesh = new THREE.Mesh(frameBox(bw, bh, depth), mat);
     mesh.position.set(bx, by, 0);
     mesh.castShadow = true;
     group.add(mesh);
   });
-  const beadMat = mat.clone();
-  beadMat.color = new THREE.Color('#c4a27a');
   const bead = 0.03;
   const innerW = w - mould * 2;
   const innerH = h - mould * 2;
@@ -340,12 +347,10 @@ function addWoodFrame(scene, x, y, w, h, mat) {
     [innerW / 2 - bead / 2, 0, bead, innerH - bead * 2],
   ];
   beads.forEach(([bx, by, bw, bh]) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth * 0.45), beadMat);
+    const mesh = new THREE.Mesh(frameBox(bw, bh, depth * 0.45), beadMat);
     mesh.position.set(bx, by, depth * 0.28);
     group.add(mesh);
   });
-  const lipMat = mat.clone();
-  lipMat.color = new THREE.Color('#4e301c');
   const lip = 0.028;
   const lips = [
     [0, h / 2 + lip / 2, w + lip * 2, lip],
@@ -354,7 +359,7 @@ function addWoodFrame(scene, x, y, w, h, mat) {
     [w / 2 + lip / 2, 0, lip, h],
   ];
   lips.forEach(([bx, by, bw, bh]) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, depth * 0.55), lipMat);
+    const mesh = new THREE.Mesh(frameBox(bw, bh, depth * 0.55), lipMat);
     mesh.position.set(bx, by, -0.01);
     group.add(mesh);
   });
@@ -362,13 +367,23 @@ function addWoodFrame(scene, x, y, w, h, mat) {
   scene.add(group);
 }
 
+const PRINT_W = 1.82;
+const PRINT_H = 2.18;
+const MOULD = 0.11;
+
+function frameSize(aspect) {
+  if (Math.abs(aspect - 0.75) < 0.02) return { w: PRINT_W, h: PRINT_H };
+  const planeH = PRINT_H - MOULD * 2 + 0.05;
+  const planeW = planeH * aspect;
+  return { w: planeW + MOULD * 2 - 0.05, h: PRINT_H };
+}
+
 export async function createExhibition(renderer, { reduce, pieces }) {
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e6dfd4');
   scene.background = BG;
   scene.fog = new THREE.Fog(BG, 24, 48);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
+  scene.environment = roomTexture(renderer, 0.05);
   scene.environmentIntensity = 0.35;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
@@ -416,7 +431,10 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }
   scene.add(bench);
 
-  const loaded = await Promise.all(pieces.map(async (p) => ({ ...p, tex: await loadTex(p.image, renderer) })));
+  const loaded = await Promise.all(pieces.map(async (p) => {
+    const shot = await loadTex(p.image, renderer);
+    return { ...p, tex: shot ? shot.tex : null, aspect: shot ? shot.aspect : 0 };
+  }));
   const gap = 3.1;
   const works = loaded.map((p, i) => ({
     ...p,
@@ -431,40 +449,42 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     metalness: 0.04,
   });
   const poolMap = poolTexture();
+  const poolGeo = new THREE.PlaneGeometry(3.1, 3.6);
+  const poolMat = new THREE.MeshBasicMaterial({
+    map: poolMap,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const beadMat = wood.clone();
+  beadMat.color = new THREE.Color('#c4a27a');
+  const lipMat = wood.clone();
+  lipMat.color = new THREE.Color('#4e301c');
   works.forEach((p) => {
     const x = p.x;
     const spot = new THREE.SpotLight(0xffe0b0, 14, 9, 0.42, 0.45, 1);
     spot.position.set(x, 4.7, 2.5);
-    const focusY = p.model === 'pendant' ? 0.62 : p.model === 'tower' ? 0.85 : 2.15;
-    spot.target.position.set(x, focusY, p.kind === 'sculpture' ? 1.15 : 0.08);
+    const framed = !!p.tex;
+    const focusY = framed ? 2.15 : p.model === 'pendant' ? 0.62 : p.model === 'tower' ? 0.85 : 2.15;
+    spot.target.position.set(x, focusY, framed || p.kind !== 'sculpture' ? 0.08 : 1.15);
     scene.add(spot, spot.target);
-    const pool = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.1, 3.6),
-      new THREE.MeshBasicMaterial({
-        map: poolMap,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    );
+    const pool = new THREE.Mesh(poolGeo, poolMat);
     pool.position.set(x, 2.35, 0.012);
     scene.add(pool);
 
-    if (p.kind === 'sculpture') {
-      scene.add(p.model === 'pendant' ? makePendant(x) : makeTower(x));
-    } else {
-      const frameW = 1.82;
-      const frameH = 2.18;
-      const mould = 0.11;
-      addWoodFrame(scene, x, 2.15, frameW, frameH, wood);
-      if (p.tex) {
-        const art = new THREE.Mesh(
-          new THREE.PlaneGeometry(frameW - mould * 2 + 0.05, frameH - mould * 2 + 0.05),
-          new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 }),
-        );
-        art.position.set(x, 2.15, 0.018);
-        scene.add(art);
-      }
+    if (framed) {
+      const frame = frameSize(p.aspect || 0.75);
+      p.frame = frame;
+      addWoodFrame(scene, x, 2.15, frame.w, frame.h, wood, beadMat, lipMat);
+      const art = new THREE.Mesh(
+        new THREE.PlaneGeometry(frame.w - MOULD * 2 + 0.05, frame.h - MOULD * 2 + 0.05),
+        new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 }),
+      );
+      art.position.set(x, 2.15, 0.018);
+      scene.add(art);
+    } else if (p.kind === 'sculpture') {
+      const build = sculptureBuilders[p.model] || makeTower;
+      scene.add(build(x));
     }
 
     const made = labelTexture(p, renderer);
@@ -512,6 +532,11 @@ export async function createExhibition(renderer, { reduce, pieces }) {
   }
 
   function pieceBox(work) {
+    if (work.frame) {
+      const halfW = work.frame.w / 2 + 0.07;
+      const halfH = work.frame.h / 2 + 0.08;
+      return { minX: work.x - halfW, maxX: work.x + halfW, minY: 2.15 - halfH, maxY: 2.15 + halfH, z: 0 };
+    }
     if (work.model === 'pendant') {
       return { minX: work.x - 0.36, maxX: work.x + 0.36, minY: 0.02, maxY: 0.92, z: 1.05 };
     }
@@ -525,7 +550,7 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const work = label.work;
     const aspect = label.aspect || 2.4;
     const b = pieceBox(work);
-    if (work.kind === 'sculpture') {
+    if (!work.frame && work.kind === 'sculpture') {
       const w = narrow ? 0.95 : 0.82;
       const h = w / aspect;
       const edge = work.model === 'pendant' ? 0.24 : 0.42;

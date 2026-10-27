@@ -8,6 +8,8 @@
 //   model is a local OBJ. The wheel throws that model's own silhouette in clay,
 //   then the finished colour fades in after the wheel has fully stopped.
 // EXHIBITION items: { kind: 'painting' | 'sculpture', model?: 'tower' | 'pendant', title, image?, artist?, year?, medium?, dimensions?, description? }
+//   An image hangs in the wood frame. model is unused while an image is set,
+//   and stays so a later scan can replace the photograph.
 // DESIGN items: { slug, title, category, text?, year?, label?, rightTitle?, rightText?, sheet?, swatches?, slots, source, links? }
 //   category is a word copied from that project's title or text. It only groups
 //   the binder: same category stays together, and only the first page of the
@@ -76,12 +78,14 @@ export const EXHIBITION = [
     kind: 'sculpture',
     model: 'tower',
     title: 'Untitled',
+    image: 'assets/hanouf/art/sculpture/tower.jpg',
     artist: ARTIST.name,
   },
   {
     kind: 'sculpture',
     model: 'pendant',
     title: 'Untitled',
+    image: 'assets/hanouf/art/necklace jewelry/IMG_3956.jpg',
     artist: ARTIST.name,
   },
 ];

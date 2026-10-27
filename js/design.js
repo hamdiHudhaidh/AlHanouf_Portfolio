@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { ARTIST } from './projects.js';
+import { loadImage, roomTexture } from './media.js';
 
 // Design is a ring binder on the same bone ground as the other scenes.
 // 00 is the closed cover. Each later number is one project, in category
@@ -41,16 +41,6 @@ function groupByCategory(list) {
 
 function easeInOut(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
-}
-
-function loadImage(url) {
-  return new Promise((resolve) => {
-    if (!url) { resolve(null); return; }
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
 }
 
 function mixHex(hex, toward, t) {
@@ -290,15 +280,15 @@ function aspectOf(slot) {
 function preloadVideo(video) {
   return new Promise((resolve) => {
     if (!video) { resolve(); return; }
-    if (video.readyState >= 2) { resolve(); return; }
+    if (video.readyState >= 1) { resolve(); return; }
     const done = () => {
-      video.removeEventListener('loadeddata', done);
+      video.removeEventListener('loadedmetadata', done);
       video.removeEventListener('error', done);
       resolve();
     };
-    video.addEventListener('loadeddata', done);
+    video.addEventListener('loadedmetadata', done);
     video.addEventListener('error', done);
-    setTimeout(done, 2500);
+    setTimeout(done, 1200);
   });
 }
 
@@ -584,10 +574,11 @@ function blobTexture() {
 export async function createDesign(renderer, { reduce, projects }) {
   const sources = new Set();
   projects.forEach((project) => {
-    (project.images || []).forEach((src) => sources.add(src));
     (project.slots || project.items || []).forEach((item) => {
-      if (item && item.src) sources.add(item.src);
-      if (item && item.poster) sources.add(item.poster);
+      if (!item) return;
+      if (item.kind === 'video') {
+        if (item.poster) sources.add(item.poster);
+      } else if (item.src) sources.add(item.src);
     });
   });
   const images = new Map();
@@ -934,10 +925,8 @@ export async function createDesign(renderer, { reduce, projects }) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#e8e1d6');
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = roomTexture(renderer, 0.04);
   scene.environmentIntensity = 0.42;
-  pmrem.dispose();
 
   const rough = roughTexture();
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());

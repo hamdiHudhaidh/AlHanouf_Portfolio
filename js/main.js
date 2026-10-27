@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { ARTIST, CERAMICS, DESIGN, EXHIBITION, SCENES } from './projects.js';
-import { createCeramics } from './ceramics.js';
+import { CLAY_TEXTURES, createCeramics } from './ceramics.js';
 import { createDesign } from './design.js';
 import { createExhibition } from './exhibition.js';
+import { preferredURL, prefetchAssets } from './media.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = (s) => document.querySelector(s);
@@ -45,17 +46,22 @@ function drawingRatio(w, h) {
 }
 
 let fitted = '';
+let fittedView = null;
 function fitRenderer() {
   const { w, h } = viewBox();
   if (w < 2 || h < 2) return;
   const ratio = drawingRatio(w, h);
   const key = `${w}x${h}@${ratio}`;
-  if (renderer && key !== fitted) {
+  const sizeChanged = key !== fitted;
+  if (renderer && sizeChanged) {
     fitted = key;
     renderer.setPixelRatio(ratio);
     renderer.setSize(w, h, false);
   }
-  active?.resize(w, h);
+  if (!active) return;
+  if (!sizeChanged && fittedView === active) return;
+  fittedView = active;
+  active.resize(w, h);
 }
 
 function getRenderer() {
@@ -384,9 +390,41 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+function sectionURLs(id) {
+  const urls = [];
+  if (id === 'ceramics') {
+    CERAMICS.forEach((item) => {
+      if (item.model) urls.push(item.model.replace(/\.obj$/i, '.mesh'));
+    });
+    CLAY_TEXTURES.forEach((url) => urls.push(preferredURL(url)));
+  }
+  if (id === 'design') {
+    DESIGN.forEach((project) => {
+      (project.slots || []).forEach((item) => {
+        if (!item) return;
+        if (item.kind === 'video') {
+          if (item.poster) urls.push(preferredURL(item.poster));
+        } else if (item.src && !/\.mp4$/i.test(item.src)) urls.push(preferredURL(item.src));
+      });
+    });
+  }
+  if (id === 'art') {
+    EXHIBITION.forEach((piece) => {
+      if (piece.image) urls.push(preferredURL(piece.image));
+    });
+  }
+  return urls;
+}
+
 renderAbout();
 go(sceneFromHash()).then(() => {
   document.fonts.ready.then(() => setTimeout(() => loader.classList.add('done'), reduce ? 0 : 500));
+  const here = sceneFromHash();
+  const rest = [];
+  SCENES.forEach((scene) => {
+    if (scene.id !== here) rest.push(...sectionURLs(scene.id));
+  });
+  prefetchAssets(rest);
 });
 requestAnimationFrame((n) => { last = n; frame(n); });
 
