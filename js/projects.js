@@ -83,118 +83,48 @@ export const DESIGN = [
   {
     slug: 'peak-identity',
     title: 'Peak',
-    tab: 'Peak Identity',
-    tabColor: '#E0612A',
-    peekRight: { label: 'MEQAF Identity', color: '#9D0F28', opens: 'MEQAF' },
     year: '2024',
     source: src('peak-identity'),
     spreads: [
       {
-        left: {
-          kind: 'copy',
-          title: 'Peak',
-          kicker: 'Brand Identity',
-          year: '2024',
-          lead: 'Peak Events Operation Management',
-          body: [
-            'The visual identity is built around an arrow icon that points to the top, symbolizing the ultimate goal of reaching the highest point. The system combines strength and simple creativity through a direct and meaningful design language.',
-            'The color palette carries clear intentions: orange represents creativity, black embodies strength, and white stands for honesty. These core colors are softly supported by yellow, green, and blue, which bring elements of opportunity, safety, and trust to the complete identity system.',
-          ],
-        },
-        right: {
-          kind: 'peak-1',
-          board: `${peak}/identity/peake mockup.jpg`,
-          saxon: `${peak}/posts and designs/Saxon .jpg`,
-          cardLeft: `${peak}/posts and designs/card-left.jpg`,
-          cardRight: `${peak}/posts and designs/card-right.jpg`,
-          yearPost: `${peak}/posts and designs/بوست اكمال سنة للموظفين.jpg`,
-          staff: `${peak}/posts and designs/22بطاقات الموظفين.png`,
-        },
+        left: 'assets/hanouf/design/pages/peak-1-left.jpg',
+        right: 'assets/hanouf/design/pages/peak-1-right.jpg',
       },
       {
-        left: {
-          kind: 'peak-2-left',
-          title: 'Peak',
-          kicker: 'Brand Identity',
-          year: '2024',
-          badges: `${peak}/identity/75d44dde-a65d-4a51-9430-09600184421b_rw_3840.png`,
-          folder: `${peak}/identity/b9d6ccf2-92ac-4211-bf6e-fd5ffefdbbde_rw_1920.jpg`,
-          laptop: `${peak}/website/website mockup template.png`,
-          video: { src: `${peak}/website/website.mp4`, poster: `${peak}/website/website mockup template.png` },
-          swatches: [
-            { name: 'Creativity', hex: '#DC6529' },
-            { name: 'Strength', hex: '#000000' },
-            { name: 'Honesty', hex: '#FFFFFF' },
-            { name: 'Stability', hex: '#9EC77D' },
-            { name: 'Trust', hex: '#89B3D5' },
-            { name: 'Opportunity', hex: '#F2BA47' },
-          ],
-        },
-        right: {
-          kind: 'peak-2-right',
-          ipadLeft: `${peak}/videos/'24 part 1 No.1.png`,
-          videoLeft: { src: `${peak}/videos/'24 part 1 No.1.mp4`, poster: `${peak}/videos/'24 part 1 No.1.png` },
-          ipadRight: `${peak}/videos/saudi national day 2.png`,
-          videoRight: { src: `${peak}/videos/saudi national day 2.mp4`, poster: `${peak}/videos/saudi national day 2.png` },
-          profile: `${peak}/company profile/profile peak mockup.jpg`,
-        },
+        left: 'assets/hanouf/design/pages/peak-2-left.jpg',
+        right: 'assets/hanouf/design/pages/peak-2-right.jpg',
+        screens: [
+          {
+            side: 'left',
+            src: `${peak}/website/website.mp4`,
+            rect: { x: 0.248, y: 0.530, w: 0.372, h: 0.275 },
+          },
+          {
+            side: 'right',
+            src: `${peak}/videos/'24 part 1 No.1.mp4`,
+            rect: { x: 0.131, y: 0.127, w: 0.220, h: 0.261 },
+          },
+          {
+            side: 'right',
+            src: `${peak}/videos/saudi national day 2.mp4`,
+            rect: { x: 0.531, y: 0.127, w: 0.220, h: 0.261 },
+          },
+        ],
       },
     ],
   },
   {
     slug: 'meqaf-identity',
     title: 'MEQAF',
-    tab: 'MEQAF Identity',
-    tabColor: '#9D0F28',
-    peekBelow: { color: '#E0612A', opens: 'Peak' },
     year: '2026',
     spreads: [
       {
-        left: {
-          kind: 'copy',
-          title: 'MEQAF',
-          kicker: 'Brand Identity',
-          year: '2026',
-          body: [
-            '«MEQAF» is a Saudi brand founded by a female creator to turn favorite memories into beautiful keepsakes, starting with custom magnetic frames. The visual identity reflects the founder\'s warm and lively personality, making the brand feel friendly, accessible, and full of joy.',
-            'The main design goal was to combine a sense of nostalgia with a fresh, modern energy. The solution features a playful, square-faced character with changing expressions that bring packaging, labels, and sticker sheets to life. Paired with a warm yellow and deep burgundy color palette, the identity creates a memorable unboxing experience that makes saving special moments feel like a celebration.',
-          ],
-        },
-        right: {
-          kind: 'meqaf-1',
-          paper: `${meqaf}/red-paper-texture.jpg`,
-          sticker: `${meqaf}/Square_Sticker_Mockup_1.jpg`,
-          boxOpen: `${meqaf}/Box_Mockup_1.jpg`,
-          boxClosed: `${meqaf}/Box_Mockup_2.jpg`,
-          logo: `${meqaf}/logo-yellow.jpg`,
-          magnet: `${meqaf}/Fridge_Magnet_Mockup_1.jpg`,
-          swatches: [
-            { name: 'Ruby Red', hex: '#9D0F28' },
-            { name: 'Yellow', hex: '#DBA02B' },
-            { name: 'Blue', hex: '#6997A4' },
-            { name: 'Cream', hex: '#FBE4CE' },
-          ],
-        },
+        left: 'assets/hanouf/design/pages/meqaf-1-left.jpg',
+        right: 'assets/hanouf/design/pages/meqaf-1-right.jpg',
       },
       {
-        left: {
-          kind: 'meqaf-2-left',
-          title: 'MEQAF',
-          kicker: 'Brand Identity',
-          year: '2026',
-          post: `${meqaf}/meqaf posts-01.jpg`,
-          patternRed: `${meqaf}/pattren-04.png`,
-          patternCream: `${meqaf}/pattren-03.png`,
-          magnets: `${meqaf}/meqaf posts-03.jpg`,
-        },
-        right: {
-          kind: 'meqaf-2-right',
-          card: `${meqaf}/Free_Square_Business_Card_Mockup_2.jpg`,
-          flyer: `${meqaf}/Free_Tabloid_Falyer_Mockup_2.jpg`,
-          logo: `${meqaf}/logo-red.jpg`,
-          post: `${meqaf}/meqaf posts-01.jpg`,
-          sheet: `${meqaf}/sticker_sheet_mockup_v3.jpg`,
-        },
+        left: 'assets/hanouf/design/pages/meqaf-2-left.jpg',
+        right: 'assets/hanouf/design/pages/meqaf-2-right.jpg',
       },
     ],
   },
@@ -203,34 +133,19 @@ export const DESIGN = [
 function attachSlots(project) {
   const slots = [];
   const seen = new Set();
-  const addImage = (path) => {
-    if (!path || seen.has(path) || /\.mp4$/i.test(path)) return;
-    seen.add(path);
-    slots.push(img(path));
+  const add = (item) => {
+    const key = `${item.kind}:${item.src}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    slots.push(item);
   };
-  const walk = (value) => {
-    if (!value) return;
-    if (typeof value === 'string') {
-      if (value.startsWith('assets/')) addImage(value);
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach(walk);
-      return;
-    }
-    if (typeof value === 'object') {
-      if (typeof value.src === 'string' && /\.mp4$/i.test(value.src)) {
-        addImage(value.poster);
-        const key = `v:${value.src}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          slots.push(vid(value.src, value.poster));
-        }
-      }
-      Object.values(value).forEach(walk);
-    }
-  };
-  walk(project.spreads);
+  (project.spreads || []).forEach((spread) => {
+    if (spread.left) add(img(spread.left));
+    if (spread.right) add(img(spread.right));
+    (spread.screens || []).forEach((screen) => {
+      add(vid(screen.src, screen.side === 'left' ? spread.left : spread.right));
+    });
+  });
   project.slots = slots;
 }
 
