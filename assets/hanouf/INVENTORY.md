@@ -12,29 +12,16 @@ Untitled pieces should use the folder name or stay untitled — ask Hamdi for re
 
 ## Art section (`art/`)
 
-### Sculpture — 3D (to rebuild in 3D)
-Stacked natural-wood block tower: tall column of rectangular pine/wood blocks and cubes, many rotated ~45° on their edges, on a dark background. Three photos from different angles (front/sides) — enough to model it.
-  - `assets/hanouf/art/sculpture/Screenshot 1448-02-07 at 11.38.46 PM.jpg`
-  - `assets/hanouf/art/sculpture/Screenshot 1448-02-07 at 11.38.57 PM.jpg`
-  - `assets/hanouf/art/sculpture/Screenshot 1448-02-07 at 11.39.04 PM.jpg`
-No title/year/medium in Drive.
+### The three works on the wall
+Titles, media, and descriptions are in `assets/hanouf/art/ART.md`. There is no year on any of them.
+- Black print — `assets/hanouf/art/painting/black print/linocut_no_background.jpg`
+- Girl print — `assets/hanouf/art/painting/Girl print/artwork_no_background.jpg`
+- Layers | طبقات — `assets/hanouf/art/sculpture/wood_side_5_no_bg.png` (transparent side view, shown as a photograph)
 
-### Jewellery — necklace (to rebuild in 3D)
-Folder label: "necless jwelary". A small silver pendant with a textured, wavy ridged (shell/leaf-like) organic oval form; shown with its yellow clay/wax model of the same ribbed form, a clear crystal/resin stone, a pencil/tool and a brush on kraft paper; the pendant sits on a navy card reading "Put your wearable statement here !" (printed card, not a title).
-  - `assets/hanouf/art/necklace jewelry/IMG_3956.jpg`
-  - `assets/hanouf/art/necklace jewelry/IMG_3971.jpg`
-  - `assets/hanouf/art/necklace jewelry/IMG_3973.jpg`
-  - `assets/hanouf/art/necklace jewelry/IMG_3974.jpg`
-No title/year/medium in Drive.
-
-### Paintings / prints (2D, wall)
-- `IMG_9926.jpg` – colourful textured print/painting of a woman's face (yellow face, red lips, red/blue striped background), black mat.
-- `IMG_9928.jpg` – black-and-white linocut-style print of an arched doorway/mihrab with geometric star pattern, black mat.
-  - `assets/hanouf/art/painting/IMG_9926.jpg`
-  - `assets/hanouf/art/painting/IMG_9928.jpg`
+The jewellery folder, `IMG_9926`, `IMG_9928`, and the old tower photographs are not in the folder.
 
 ### Other art-folder file
-- `assets/hanouf/art/gallery_view_realistic.jpg` – a rendered gallery mock-up (IMG_9926 framed on a wall with a label "Artist Name / Veiled Gaze / 2017 / Collagraph print, mixed materials on paper"). Origin unverified (looks like a generated mock-up; label still says "Artist Name") — do NOT treat "Veiled Gaze/2017/Collagraph" as confirmed text without Hamdi's OK.
+- `assets/hanouf/art/gallery_view_realistic.jpg` – a gallery mock-up. Its printed label is not her text. The print in that picture is Girl print.
 
 ### 3D models found in Drive (folder `hanouf/pottery/`)
 - `assets/hanouf/pottery/alhanouf1.usdz` (1.6 MB, Aug 2026)
