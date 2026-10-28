@@ -6,9 +6,9 @@
 // CERAMICS items: { title, text?, year?, model?, height?, color?, metalness?, roughness? }
 //   model is a local OBJ. The wheel throws that model's own silhouette in clay,
 //   then the finished colour fades in after the wheel has fully stopped.
-// EXHIBITION items: { kind: 'painting' | 'sculpture', model?: 'tower' | 'pendant', title, image?, artist?, year?, medium?, dimensions?, description? }
-//   An image hangs in the wood frame. model is unused while an image is set,
-//   and stays so a later scan can replace the photograph.
+// EXHIBITION items: { kind: 'painting' | 'sculpture', title, image, artist?, year?, medium?, dimensions?, description?, cutout? }
+//   An image hangs in the wood frame. cutout keeps a transparent PNG on a paper ground.
+//   Leave year out when she did not give one. The words are copied from assets/hanouf/art/ART.md.
 // DESIGN is two folder projects, Peak Identity and MEQAF Identity.
 //   Each has two spreads. Copy is the text printed on Hamdi's template spreads.
 //   swatches use the names printed on those spreads. slots are filled from the
@@ -53,29 +53,28 @@ export const CERAMICS = [
 export const EXHIBITION = [
   {
     kind: 'painting',
-    title: 'Untitled',
-    image: 'assets/hanouf/art/painting/IMG_9926.jpg',
+    title: 'Black print',
+    image: 'assets/hanouf/art/painting/black print/linocut_no_background.jpg',
     artist: ARTIST.name,
+    medium: 'Linocut, ink on paper',
+    description: 'Each line was cut by hand from the lino block, so the geometry glows as white paper against the dark surface. Rough, expressive carving in the columns contrasts with the precise pattern at the center. The work looks at the tension between order and the human hand.',
   },
   {
     kind: 'painting',
-    title: 'Untitled',
-    image: 'assets/hanouf/art/painting/IMG_9928.jpg',
+    title: 'Girl print',
+    image: 'assets/hanouf/art/painting/Girl print/artwork_no_background.jpg',
     artist: ARTIST.name,
+    medium: 'Collagraph, mixed materials on paper',
+    description: 'A single figure emerges from the dense surface, with a watchful eye and bold red lips. Each impression keeps the imprint of the materials that made it.',
   },
   {
     kind: 'sculpture',
-    model: 'tower',
-    title: 'Untitled',
-    image: 'assets/hanouf/art/sculpture/tower.jpg',
+    title: 'Layers | طبقات',
+    image: 'assets/hanouf/art/sculpture/wood_side_5_no_bg.png',
     artist: ARTIST.name,
-  },
-  {
-    kind: 'sculpture',
-    model: 'pendant',
-    title: 'Untitled',
-    image: 'assets/hanouf/art/necklace jewelry/IMG_3956.jpg',
-    artist: ARTIST.name,
+    medium: 'Pine wood blocks, hand-cut and glued',
+    description: 'Small blocks of wood, cut at different angles and stacked around a single post, rise as a tower of layers. Each block is its own voice, and together they form one body, like the layers of a community built over time. Turn the work and the silhouette changes, just as a community looks different from each side.',
+    cutout: true,
   },
 ];
 

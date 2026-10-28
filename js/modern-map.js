@@ -2,10 +2,6 @@
 // WebP is requested first when it cleared the quality bar: it decodes faster
 // than AVIF here. AVIF is the next fallback. The original is last.
 export const MODERN = new Map([
-  ["assets/hanouf/art/necklace jewelry/IMG_3956.jpg", ["assets/hanouf/art/necklace jewelry/IMG_3956.webp","assets/hanouf/art/necklace jewelry/IMG_3956.avif"]],
-  ["assets/hanouf/art/painting/IMG_9926.jpg", ["assets/hanouf/art/painting/IMG_9926.avif"]],
-  ["assets/hanouf/art/painting/IMG_9928.jpg", ["assets/hanouf/art/painting/IMG_9928.avif"]],
-  ["assets/hanouf/art/sculpture/tower.jpg", ["assets/hanouf/art/sculpture/tower.webp","assets/hanouf/art/sculpture/tower.avif"]],
   ["assets/hanouf/design/meqaf identity/Box_Mockup_1.jpg", ["assets/hanouf/design/meqaf identity/Box_Mockup_1.webp","assets/hanouf/design/meqaf identity/Box_Mockup_1.avif"]],
   ["assets/hanouf/design/meqaf identity/Box_Mockup_2.jpg", ["assets/hanouf/design/meqaf identity/Box_Mockup_2.webp","assets/hanouf/design/meqaf identity/Box_Mockup_2.avif"]],
   ["assets/hanouf/design/meqaf identity/Free_Square_Business_Card_Mockup_2.jpg", ["assets/hanouf/design/meqaf identity/Free_Square_Business_Card_Mockup_2.webp","assets/hanouf/design/meqaf identity/Free_Square_Business_Card_Mockup_2.avif"]],

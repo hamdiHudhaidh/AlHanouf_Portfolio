@@ -206,13 +206,17 @@ function wrapLines(g, text, x, y, maxW, lineH, maxLines) {
       line = test;
     }
   });
-  if (line && used < maxLines) g.fillText(line, x, y + used * lineH);
+  if (line && used < maxLines) {
+    g.fillText(line, x, y + used * lineH);
+    used += 1;
+  }
+  return used;
 }
 
 function labelTexture(piece, renderer) {
   const canvas = document.createElement('canvas');
   canvas.width = 900;
-  canvas.height = 640;
+  canvas.height = 1100;
   const g = canvas.getContext('2d');
   g.clearRect(0, 0, canvas.width, canvas.height);
   g.fillStyle = '#1d1b19';
@@ -233,7 +237,7 @@ function labelTexture(piece, renderer) {
   }
   if (piece.title || piece.year) {
     const title = piece.title || '';
-    g.font = 'italic 500 68px Cormorant, serif';
+    g.font = 'italic 500 68px Cormorant, "Noto Naskh Arabic", serif';
     if (title) g.fillText(title, left, y);
     if (piece.year) {
       const tw = title ? g.measureText(title).width + 18 : 0;
@@ -250,8 +254,7 @@ function labelTexture(piece, renderer) {
   }
   if (piece.description) {
     g.font = '400 28px Inter, sans-serif';
-    wrapLines(g, piece.description, left, y, 880, 36, 3);
-    const lines = Math.min(3, Math.ceil(g.measureText(piece.description).width / 880) || 1);
+    const lines = wrapLines(g, piece.description, left, y, 880, 36, 8);
     y += lines * 36 + 8;
   }
   const used = Math.max(48, Math.min(canvas.height, Math.ceil(y + 8)));
@@ -379,6 +382,12 @@ function frameSize(aspect) {
 }
 
 export async function createExhibition(renderer, { reduce, pieces }) {
+  if (document.fonts?.load) {
+    try {
+      await document.fonts.load('italic 500 68px Cormorant');
+      await document.fonts.load('400 68px "Noto Naskh Arabic"');
+    } catch (err) { /* the label falls back to the next face */ }
+  }
   const scene = new THREE.Scene();
   const BG = new THREE.Color('#e6dfd4');
   scene.background = BG;
@@ -476,10 +485,18 @@ export async function createExhibition(renderer, { reduce, pieces }) {
       const frame = frameSize(p.aspect || 0.75);
       p.frame = frame;
       addWoodFrame(scene, x, 2.15, frame.w, frame.h, wood, beadMat, lipMat);
-      const art = new THREE.Mesh(
-        new THREE.PlaneGeometry(frame.w - MOULD * 2 + 0.05, frame.h - MOULD * 2 + 0.05),
-        new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 }),
-      );
+      const opening = new THREE.PlaneGeometry(frame.w - MOULD * 2 + 0.05, frame.h - MOULD * 2 + 0.05);
+      if (p.cutout) {
+        const paper = new THREE.Mesh(
+          opening,
+          new THREE.MeshStandardMaterial({ color: 0xf4efe8, roughness: 0.92 }),
+        );
+        paper.position.set(x, 2.15, 0.012);
+        scene.add(paper);
+      }
+      const artMat = new THREE.MeshStandardMaterial({ map: p.tex, roughness: 0.75 });
+      if (p.cutout) artMat.alphaTest = 0.15;
+      const art = new THREE.Mesh(opening, artMat);
       art.position.set(x, 2.15, 0.018);
       scene.add(art);
     } else if (p.kind === 'sculpture') {
@@ -628,8 +645,9 @@ export async function createExhibition(renderer, { reduce, pieces }) {
     const l = labelBox(labels.find((label) => label.work === work) || { work, aspect: 2.4 });
     const minX = Math.min(b.minX, l.x - l.w / 2) - 0.2;
     const maxX = Math.max(b.maxX, l.x + l.w / 2) + 0.22;
-    const minY = Math.min(b.minY, l.y - l.h / 2) - 0.16;
+    let minY = Math.min(b.minY, l.y - l.h / 2) - 0.16;
     const maxY = Math.max(b.maxY, l.y + l.h / 2) + 0.38;
+    if (narrow) minY -= (maxY - minY) * 0.42;
     fitPose(minX, maxX, minY, maxY, b.z);
   }
 

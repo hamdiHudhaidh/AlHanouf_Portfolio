@@ -2,7 +2,7 @@
 
 Portfolio for Alhanouf Khalid Alaswad, a visual artist and graphic designer. The line on the About scene is hers: “Hi, I'm Alhanouf a visual artist and graphic designer.”
 
-The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is an open cream folder. Ceramics is a potter’s wheel. Art is a gallery wall. Design shows Peak Identity and MEQAF Identity from `assets/hanouf/design/`. Ceramics shows her two pottery models. Art shows four photographs in wood frames: two prints, the block tower, and the silver pendant. A line is printed only when it comes from her site or from text on the work itself.
+The page has four scenes: About, Ceramics, Design, and Art. About is a still editorial layout. Design is an open cream folder. Ceramics is a potter’s wheel. Art is a gallery wall. Design shows Peak Identity and MEQAF Identity from `assets/hanouf/design/`. Ceramics shows her two pottery models. Art shows three photographs in wood frames: Black print, Girl print, and the wood sculpture Layers. A line is printed only when it comes from her site or from text on the work itself.
 
 **This site:** https://hamdihudhaidh.github.io/AlHanouf_Portfolio/
 
@@ -15,7 +15,7 @@ The page has four scenes: About, Ceramics, Design, and Art. About is a still edi
 | About | `#about` | Placeholder portrait, her welcome line, LinkedIn and WhatsApp |
 | Ceramics | `#ceramics` | The wheel. Two of her models, thrown large. The spinning clay is that model’s own silhouette. After the wheel has fully stopped, the finished colour fades in. Two clay textures sit beside the wheel |
 | Design | `#design` | An open cream hard-cover folder, no rings. Peak Identity and MEQAF Identity, two spreads each. A tall rounded side tab carries the project name |
-| Art | `#art` | Gallery wall. 00 is the whole room. Four photographs in wood frames: two prints, the block tower, and the silver pendant, each with a wall label |
+| Art | `#art` | Gallery wall. 00 is the whole room. Three photographs in wood frames: Black print, Girl print, and Layers, each with a wall label |
 
 `#exhibition` opens Art and the address bar becomes `#art`.
 
@@ -23,7 +23,7 @@ The current page name sits at the top centre. The previous page name sits at the
 
 The folder opens on Peak Identity. Each project is two spreads, so the counter runs 01 to 04: Peak, Peak, MEQAF, MEQAF. Each page is Hamdi’s template photograph, so the folder, the tabs, the type, and the pictures match that spread. The right-hand page curls to the next spread. The laptop and the two iPad mockups play their clips inside the device screen, muted and looping, only while that screen is showing. A phone frames both pages.
 
-Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. Each photograph hangs in a carved wood frame under a warm spotlight, with the picture set into the frame. The tower frame is tall, matching that photograph. The other three use the print frame. The label is printed in the room, not on a card: the artist, then place and life years only when those were given, then the italic title with the year, then the medium, then a short description. Any of those lines is left off when the piece has no data for it. On a wide screen the label sits beside the work. On a tall screen it sits below the frame.
+Art starts on 00, a zoomed-out view of the whole wall, with air above the frames. 01 and onward glide the camera in one shot to a piece. A press during that glide retargets it. Each photograph hangs in a carved wood frame under a warm spotlight, with the picture set into the frame. The two prints use the print frame. Layers is a tall side view, so its frame is tall and narrow. The label is printed in the room, not on a card: the artist, then place and life years only when those were given, then the italic title with the year, then the medium, then the description. Any of those lines is left off when the piece has no data for it. None of these three has a year. On a wide screen the label sits beside the work. On a tall screen it sits below the frame.
 
 About has a single view, so the arrows stay hidden. They also stay hidden on Ceramics or Art if that list is emptied.
 
@@ -65,7 +65,7 @@ Everything you would change is in `js/projects.js`.
 { kind: 'painting', title: '', image: 'assets/projects/example/01.webp', artist: '', year: '', medium: '', dimensions: '', description: '' }
 ```
 
-`kind` is `painting` or `sculpture`. Either one hangs in a wood frame when `image` is set. The tower photograph is a crop of her studio screenshot with the phone chrome removed, and it uses a taller frame so the stack is not stretched. The pendant photograph uses the same frame as the prints. `model` `tower` and `pendant` are kept so a later 3D scan can replace the photograph; the builders are not placed in the room while an image is set. Omit any field she did not give. The wall label prints only the fields that are present. `place` and `life` are optional and are not invented.
+`kind` is `painting` or `sculpture`. Either one hangs in a wood frame when `image` is set. The three pieces are Black print, Girl print, and Layers. Their titles, media, and descriptions are copied from `assets/hanouf/art/ART.md`. Layers is the transparent side-view photograph, set on paper inside the frame. `cutout` keeps that transparency. Omit any field she did not give, including the year. The wall label prints only the fields that are present. `place` and `life` are optional and are not invented.
 
 ## Run locally
 
@@ -97,6 +97,7 @@ The wheel, the folder, and the gallery need JavaScript, ES modules, import maps,
 - **meshoptimizer** — Copyright © 2016–2026 Arseny Kapoulkine. [MIT License](js/vendor/LICENSE-meshoptimizer.txt). The decoder is `js/vendor/meshopt_decoder.mjs`.
 - **Inter** (weights 400, 500, and 800) — Copyright 2016 The Inter Project Authors. [SIL Open Font License 1.1](assets/fonts/LICENSE-Inter.txt).
 - **Cormorant Garamond** (weight 500, roman and italic) — Copyright 2015 The Cormorant Project Authors. [SIL Open Font License 1.1](assets/fonts/LICENSE-Cormorant.txt).
+- **Noto Naskh Arabic** — Copyright 2010, 2012–2020 Google Inc. and Google LLC. [SIL Open Font License 1.1](assets/fonts/LICENSE-NotoNaskh.txt). It draws the Arabic in the Layers title.
 - Project images and the words in `js/projects.js` are Alhanouf Khalid Alaswad’s, from [her portfolio](https://alhanoufalaswad.myportfolio.com).
 
 ## Deploy
